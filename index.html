@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>外贸跟单管理</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <h1>外贸跟单管理</h1>
+      <span id="modeBadge" class="badge mode"></span>
+    </div>
+    <button class="btn btn-primary" id="btnAdd">+ 新增订单</button>
+  </header>
+
+  <main class="container">
+    <!-- 统计卡片 -->
+    <section class="stats" id="stats"></section>
+
+    <!-- 工具栏：视图切换 / 搜索 / 筛选 -->
+    <section class="toolbar">
+      <div class="view-toggle">
+        <button class="view-btn active" data-view="table">📋 表格</button>
+        <button class="view-btn" data-view="kanban">📌 看板</button>
+      </div>
+      <input type="search" id="searchInput" class="search" placeholder="搜索订单号 / 客户 / 产品 / 国家">
+      <select id="statusFilter" class="select"></select>
+    </section>
+
+    <!-- 视图内容区 -->
+    <section id="viewContainer"></section>
+  </main>
+
+  <!-- 新增 / 编辑弹窗 -->
+  <div class="modal-mask" id="modalMask" hidden>
+    <div class="modal">
+      <div class="modal-head">
+        <h2 id="modalTitle">新增订单</h2>
+        <button class="close" id="modalClose" type="button">×</button>
+      </div>
+      <form id="orderForm" class="form-grid">
+        <label>订单号
+          <input id="f_order_no" type="text" placeholder="留空则自动生成">
+        </label>
+        <label>客户名称 <span class="req">*</span>
+          <input id="f_customer" type="text" placeholder="必填">
+        </label>
+        <label>国家/地区
+          <input id="f_country" type="text" placeholder="如 美国">
+        </label>
+        <label>产品名称
+          <input id="f_product" type="text" placeholder="如 不锈钢水杯">
+        </label>
+        <label>数量
+          <input id="f_quantity" type="text" placeholder="如 5000 个">
+        </label>
+        <label>订单金额
+          <input id="f_amount" type="text" placeholder="如 $12,500">
+        </label>
+        <label>下单日期
+          <input id="f_order_date" type="date">
+        </label>
+        <label>交期
+          <input id="f_delivery_date" type="date">
+        </label>
+        <label>进度状态
+          <select id="f_status"></select>
+        </label>
+        <label>付款方式
+          <input id="f_payment" type="text" placeholder="如 30%预付+70%见提单">
+        </label>
+        <label class="span2">备注
+          <textarea id="f_remark" rows="3" placeholder="自由填写"></textarea>
+        </label>
+        <div class="form-actions span2">
+          <button type="button" class="btn" id="modalCancel">取消</button>
+          <button type="submit" class="btn btn-primary">保存</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 提示浮层 -->
+  <div id="toast" class="toast" hidden></div>
+
+  <script src="config.js"></script>
+  <script src="storage.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
