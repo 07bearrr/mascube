@@ -24,6 +24,7 @@ let filters = { search: '', status: '' };
 let sort = { field: 'created_at', dir: 'desc' };
 let currentPage = 1;
 let editingId = null;
+let currentModule = 'orders';   // 'orders' | 'contracts'
 const PAGE_SIZE = 20;
 
 const $ = s => document.querySelector(s);
@@ -61,7 +62,7 @@ function statusBadge(status) {
 /* ---------- 数据加载 ---------- */
 async function refresh() {
   try {
-    orders = await Storage.getAll();
+    orders = await Storage.getAll('orders');
     render();
   } catch (err) {
     console.error(err);
@@ -280,13 +281,13 @@ async function onSubmit(e) {
   try {
     if (editingId) {
       data.updated_at = nowISO();
-      await Storage.update(editingId, data);
+      await Storage.update('orders', editingId, data);
       toast('已保存');
     } else {
       data.id = genId();
       data.created_at = nowISO();
       data.updated_at = nowISO();
-      await Storage.add(data);
+      await Storage.add('orders', data);
       toast('已新增');
     }
     closeModal();
@@ -302,7 +303,7 @@ async function confirmDelete(id) {
   const name = o ? o.customer : '';
   if (!confirm(`确定删除「${name}」这条订单吗？删除后不可恢复。`)) return;
   try {
-    await Storage.remove(id);
+    await Storage.remove('orders', id);
     toast('已删除');
     await refresh();
   } catch (err) {
@@ -328,6 +329,15 @@ function setView(v) {
   render();
 }
 
+/* ---------- 模块切换 ---------- */
+function setModule(m) {
+  currentModule = m;
+  $$('.module-tab').forEach(t => t.classList.toggle('active', t.dataset.module === m));
+  $('#module-orders').hidden = m !== 'orders';
+  $('#module-contracts').hidden = m !== 'contracts';
+  $('#btnAdd').textContent = m === 'orders' ? '+ 新增订单' : '+ 上传合同';
+}
+
 /* ---------- 事件绑定 ---------- */
 function bindEvents() {
   document.addEventListener('click', e => {
@@ -349,6 +359,8 @@ function bindEvents() {
       else { sort.field = key; sort.dir = 'asc'; }
       render(); return;
     }
+    const moduleTab = e.target.closest('.module-tab');
+    if (moduleTab) { setModule(moduleTab.dataset.module); return; }
     const viewBtn = e.target.closest('[data-view]');
     if (viewBtn) { setView(viewBtn.dataset.view); return; }
   });
@@ -374,7 +386,7 @@ function bindEvents() {
     const status = col.dataset.status;
     const o = orders.find(x => x.id === id);
     if (o && o.status !== status) {
-      await Storage.update(id, { status });
+      await Storage.update('orders', id, { status });
       await refresh();
     }
   });
@@ -383,7 +395,10 @@ function bindEvents() {
   $('#modalClose').addEventListener('click', closeModal);
   $('#modalCancel').addEventListener('click', closeModal);
   $('#modalMask').addEventListener('click', e => { if (e.target === $('#modalMask')) closeModal(); });
-  $('#btnAdd').addEventListener('click', () => openAdd());
+  $('#btnAdd').addEventListener('click', () => {
+    if (currentModule === 'orders') openAdd();
+    else if (window.ContractApp) ContractApp.openUpload();
+  });
 
   $('#searchInput').addEventListener('input', e => { filters.search = e.target.value; currentPage = 1; render(); });
   $('#statusFilter').addEventListener('change', e => { filters.status = e.target.value; currentPage = 1; render(); });
@@ -400,6 +415,8 @@ async function init() {
   Storage.init();
   populateSelects();
   bindEvents();
+  setModule('orders');
+  if (window.ContractApp) await ContractApp.init();
   await refresh();
 }
 document.addEventListener('DOMContentLoaded', init);
