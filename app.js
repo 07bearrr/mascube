@@ -6,23 +6,34 @@
 
 const ORDER_TYPES = ['翻单', '新单'];
 
-const PROGRESS_STEPS = [
-  { key: 'quote_confirmed', label: '已收到返单工厂单价交期', type: 'check' },
-  { key: 'pi_sent', label: 'PI已发送', type: 'check' },
-  { key: 'po_received', label: 'PO已收到', type: 'check' },
-  { key: 'recheck_price', label: '已复核单价交期', type: 'check' },
-  { key: 'contract_drafted', label: '已撰写采购合同', type: 'check' },
-  { key: 'contract_stamped', label: '合同已敲章', type: 'check' },
-  { key: 'countersigned', label: '供应商已提供回签', type: 'check' },
-  { key: 'packaging', label: '包材进度', type: 'select', doneValue: '制版已确认',
-    options: ['沿用老设计', '客户修改设计中', '我们的设计师修改设计中', '设计文件已发给对应包装厂', '包装厂已制作出制版', '制版已确认'] },
-  { key: 'bulk_prod', label: '大货制作', type: 'select', doneValue: '大货制作完毕', options: ['大货制作中', '大货制作完毕'] },
-  { key: 'bulk_sample', label: '大货样', type: 'select', doneValue: '大货样已寄出', options: ['大货样未寄出', '大货样已寄出'] },
-  { key: 'bulk_photos', label: '大货照', type: 'select', doneValue: '大货照已齐', options: ['大货照未齐', '大货照已齐'] },
-  { key: 'warehouse_receipt', label: '进仓单', type: 'select', doneValue: '进仓单已发', options: ['进仓单未发', '进仓单已发'] },
-  { key: 'warehouse', label: '进仓', type: 'select', doneValue: '已进仓', options: ['未进仓', '已进仓'] },
-  { key: 'inspection', label: '验货', type: 'select', doneValue: '本人已验货', options: ['本人未验货', '本人已验货'] },
+const CHECK_STEPS = [
+  { key: 'quote_confirmed', label: '已收到返单工厂单价交期' },
+  { key: 'pi_sent', label: 'PI已发送' },
+  { key: 'po_received', label: 'PO已收到' },
+  { key: 'recheck_price', label: '已复核单价交期' },
+  { key: 'contract_drafted', label: '已撰写采购合同' },
+  { key: 'contract_stamped', label: '合同已敲章' },
+  { key: 'countersigned', label: '供应商已提供回签' },
 ];
+
+const SELECT_STEPS = [
+  { key: 'bulk_prod', label: '大货制作', doneValue: '大货制作完毕', options: ['大货制作中', '大货制作完毕'] },
+  { key: 'bulk_sample', label: '大货样', doneValue: '大货样已寄出', options: ['大货样未寄出', '大货样已寄出'] },
+  { key: 'bulk_photos', label: '大货照', doneValue: '大货照已齐', options: ['大货照未齐', '大货照已齐'] },
+  { key: 'warehouse_receipt', label: '进仓单', doneValue: '进仓单已发', options: ['进仓单未发', '进仓单已发'] },
+  { key: 'warehouse', label: '进仓', doneValue: '已进仓', options: ['未进仓', '已进仓'] },
+  { key: 'inspection', label: '验货', doneValue: '本人已验货', options: ['本人未验货', '本人已验货'] },
+];
+
+const PACKAGING_TYPES = [
+  { key: 'color_box', label: '彩盒' },
+  { key: 'mid_box', label: '中盒', allowNone: true },
+  { key: 'outer_carton', label: '外箱' },
+];
+
+const PACKAGING_STAGES = ['沿用老设计', '等客户做设计', '我们设计改条码中', '设计文件已发包装厂/工厂', '包装厂/工厂已制作出制版', '制版已确认'];
+
+const TOTAL_STEPS = CHECK_STEPS.length + 1 + SELECT_STEPS.length;
 
 const ITEM_FIELDS = [
   { key: 'item_no', label: '货号' },
@@ -88,13 +99,18 @@ function renderModeBadge() {
   }
 }
 
+function packagingDone(packaging) {
+  const p = packaging && typeof packaging === 'object' ? packaging : {};
+  return p.color_box === '制版已确认' &&
+         p.outer_carton === '制版已确认' &&
+         (p.mid_box === '制版已确认' || p.mid_box === '无中盒');
+}
 function progressDone(item) {
   const p = item.progress || {};
   let done = 0;
-  PROGRESS_STEPS.forEach(s => {
-    if (s.type === 'check') { if (p[s.key] === true) done++; }
-    else if (p[s.key] === s.doneValue) done++;
-  });
+  CHECK_STEPS.forEach(s => { if (p[s.key] === true) done++; });
+  if (packagingDone(p.packaging)) done++;
+  SELECT_STEPS.forEach(s => { if (p[s.key] === s.doneValue) done++; });
   return done;
 }
 
@@ -153,7 +169,7 @@ function renderTracking() {
 
   const body = rows.length ? rows.map(r => {
     const done = progressDone(r.it);
-    const pct = Math.round(done / PROGRESS_STEPS.length * 100);
+    const pct = Math.round(done / TOTAL_STEPS * 100);
     return `<tr>
       <td>${escapeHtml(r.c.sales_order_no || '—')}</td>
       <td class="strong">${escapeHtml(r.it.item_no || '—')}</td>
@@ -162,7 +178,7 @@ function renderTracking() {
       <td class="cell-progress">
         <div class="track-progress">
           <div class="bar"><div class="fill" style="width:${pct}%"></div></div>
-          <span>${done}/${PROGRESS_STEPS.length}</span>
+          <span>${done}/${TOTAL_STEPS}</span>
         </div>
       </td>
       <td class="ops">
@@ -344,14 +360,27 @@ async function removeContract(id) {
 
 /* ---------- 进度追踪：进度弹窗 ---------- */
 function progressStepsHtml(progress = {}) {
-  return PROGRESS_STEPS.map(s => {
-    if (s.type === 'check') {
-      return `<label class="progress-step">
-        <input type="checkbox" data-progress-check="${s.key}" ${progress[s.key] === true ? 'checked' : ''}>
-        <span>${s.label}</span>
-      </label>`;
-    }
-    const cur = progress[s.key] || '';
+  const p = progress || {};
+  const checks = CHECK_STEPS.map(s => `
+    <label class="progress-step">
+      <input type="checkbox" data-progress-check="${s.key}" ${p[s.key] === true ? 'checked' : ''}>
+      <span>${s.label}</span>
+    </label>`).join('');
+
+  const packaging = (p.packaging && typeof p.packaging === 'object') ? p.packaging : {};
+  const packagingHtml = PACKAGING_TYPES.map(t => {
+    const cur = packaging[t.key] || '';
+    const opts = [''].concat(PACKAGING_STAGES);
+    if (t.allowNone) opts.push('无中盒');
+    const options = opts.map(o => `<option value="${o}" ${o === cur ? 'selected' : ''}>${o === '' ? '未开始' : o}</option>`).join('');
+    return `<label class="packaging-item">
+      <span class="packaging-name">${t.label}</span>
+      <select data-packaging="${t.key}">${options}</select>
+    </label>`;
+  }).join('');
+
+  const selects = SELECT_STEPS.map(s => {
+    const cur = p[s.key] || '';
     return `<label class="progress-step select">
       <span>${s.label}</span>
       <select data-progress-select="${s.key}">
@@ -360,13 +389,51 @@ function progressStepsHtml(progress = {}) {
       </select>
     </label>`;
   }).join('');
+
+  return `
+    <div class="progress-section">
+      <div class="progress-section-title">流程勾选（需按顺序）</div>
+      <div class="progress-list">${checks}</div>
+    </div>
+    <div class="progress-section">
+      <div class="progress-section-title">包材进度（彩盒 / 中盒 / 外箱）</div>
+      <div class="packaging-list">${packagingHtml}</div>
+    </div>
+    <div class="progress-section">
+      <div class="progress-section-title">后续流程</div>
+      <div class="progress-list">${selects}</div>
+    </div>`;
 }
 
 function readProgressFrom(root) {
   const progress = {};
   root.querySelectorAll('[data-progress-check]').forEach(cb => { progress[cb.dataset.progressCheck] = cb.checked; });
   root.querySelectorAll('[data-progress-select]').forEach(sel => { if (sel.value) progress[sel.dataset.progressSelect] = sel.value; });
+  const packaging = {};
+  root.querySelectorAll('[data-packaging]').forEach(sel => { packaging[sel.dataset.packaging] = sel.value; });
+  progress.packaging = packaging;
   return progress;
+}
+
+function setupSequentialChecks(root) {
+  const boxes = Array.from(root.querySelectorAll('[data-progress-check]'));
+  boxes.forEach((cb, idx) => {
+    cb.addEventListener('change', () => {
+      if (cb.checked) {
+        for (let i = 0; i < idx; i++) {
+          if (!boxes[i].checked) {
+            cb.checked = false;
+            toast('请按顺序勾选：先把前面步骤打勾', true);
+            return;
+          }
+        }
+      } else {
+        for (let i = idx + 1; i < boxes.length; i++) {
+          boxes[i].checked = false;
+        }
+      }
+    });
+  });
 }
 
 function openProgress(contractId, itemId) {
@@ -384,6 +451,7 @@ function openProgress(contractId, itemId) {
       <span>类型：<b>${escapeHtml(it.order_type || '未定')}</b></span>
     </div>`;
   $('#progressItems').innerHTML = progressStepsHtml(it.progress || {});
+  setupSequentialChecks($('#progressItems'));
   $('#progressModalMask').hidden = false;
 }
 

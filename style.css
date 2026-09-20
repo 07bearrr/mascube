@@ -252,3 +252,12 @@ td.ops { white-space: nowrap; }
   .freight-result { grid-template-columns: 1fr; }
   .freight-result .result-box.total { grid-column: span 1; }
 }
+
+/* ===== 进度弹窗分组 ===== */
+.progress-section { margin-bottom: 18px; }
+.progress-section:last-child { margin-bottom: 0; }
+.progress-section-title { font-size: 13px; font-weight: 700; color: var(--text); margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+.packaging-list { display: flex; flex-direction: column; gap: 10px; }
+.packaging-item { display: flex; align-items: center; gap: 10px; font-size: 13px; }
+.packaging-name { width: 44px; font-weight: 600; flex-shrink: 0; color: var(--text); }
+.packaging-item select { flex: 1; padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; color: var(--text); font-family: inherit; }
