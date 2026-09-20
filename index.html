@@ -67,8 +67,8 @@
                 <label>汇率（默认 6.7）
                   <input type="number" id="f_rate" step="0.01" placeholder="6.7">
                 </label>
-                <label>海运柜子价格（固定）
-                  <input type="number" value="2800" disabled>
+                <label>海运柜子价格（默认 2800）
+                  <input type="number" id="f_sea_price" step="1" placeholder="2800">
                 </label>
               </div>
             </div>
@@ -86,7 +86,7 @@
                 <div class="value" id="f_land">¥0.00</div>
               </div>
               <div class="result-box">
-                <div class="label">海运费（总体积÷68×2800×汇率）</div>
+                <div class="label">海运费（总体积÷68×海运柜子价格×汇率）</div>
                 <div class="value" id="f_sea">¥0.00</div>
               </div>
               <div class="result-box total">

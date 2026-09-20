@@ -412,13 +412,14 @@ async function saveProgress(e) {
 
 /* ---------- 模块三：运费计算 ---------- */
 const FREIGHT_KEY = 'mascube_freight_settings';
-const FREIGHT_DEFAULTS = { truck_price: '2000', exchange_rate: '6.7' };
+const FREIGHT_DEFAULTS = { truck_price: '2000', sea_price: '2800', exchange_rate: '6.7' };
 
 function loadFreightSettings() {
   let saved = {};
   try { saved = JSON.parse(localStorage.getItem(FREIGHT_KEY)) || {}; } catch (e) {}
   const s = { ...FREIGHT_DEFAULTS, ...saved };
   if (s.truck_price === '' || s.truck_price == null) s.truck_price = FREIGHT_DEFAULTS.truck_price;
+  if (s.sea_price === '' || s.sea_price == null) s.sea_price = FREIGHT_DEFAULTS.sea_price;
   if (s.exchange_rate === '' || s.exchange_rate == null) s.exchange_rate = FREIGHT_DEFAULTS.exchange_rate;
   return s;
 }
@@ -438,7 +439,8 @@ function computeFreight() {
   const truck = parseFloat($('#f_truck_price').value) || 0;
   const rate = parseFloat($('#f_rate').value) || 0;
   const land = vol / 68 * truck * rate;
-  const sea = vol / 68 * 2800 * rate;
+  const seaPrice = parseFloat($('#f_sea_price').value) || 0;
+  const sea = vol / 68 * seaPrice * rate;
   $('#f_land').textContent = fmtMoney(land);
   $('#f_sea').textContent = fmtMoney(sea);
   $('#f_total').textContent = fmtMoney(land + sea);
@@ -446,6 +448,7 @@ function computeFreight() {
 function initFreight() {
   const s = loadFreightSettings();
   $('#f_truck_price').value = s.truck_price;
+  $('#f_sea_price').value = s.sea_price;
   $('#f_rate').value = s.exchange_rate;
   computeFreight();
 }
@@ -509,6 +512,7 @@ function bindEvents() {
   // 运费计算
   $('#f_volume').addEventListener('input', computeFreight);
   $('#f_truck_price').addEventListener('input', e => { updateFreightSetting('truck_price', e.target.value); computeFreight(); });
+  $('#f_sea_price').addEventListener('input', e => { updateFreightSetting('sea_price', e.target.value); computeFreight(); });
   $('#f_rate').addEventListener('input', e => { updateFreightSetting('exchange_rate', e.target.value); computeFreight(); });
 
   $('#itemsContainer').addEventListener('input', e => {
