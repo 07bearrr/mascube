@@ -1,31 +1,53 @@
 /* ============================================================
-   外贸跟单管理 · 主逻辑
-   包含：统计卡片 / 表格视图 / 看板视图 / 增删改查
+   业务员辅助系统
+   模块一：合同管理（合同 + 产品信息，不含进度）
+   模块二：进度追踪（关联合同，更新每个货号的订单进度）
    ============================================================ */
 
-const ORDER_STATUSES = ['待跟进', '报价中', '已下单', '生产中', '质检', '已发货', '已到港', '已完成', '已取消'];
-const FINISHED_STATUSES = ['已发货', '已完成', '已取消'];
+const ORDER_TYPES = ['翻单', '新单'];
 
-const STATUS_COLORS = {
-  '待跟进': '#8b95a3',
-  '报价中': '#3b82f6',
-  '已下单': '#7c3aed',
-  '生产中': '#f59e0b',
-  '质检': '#14b8a6',
-  '已发货': '#22c55e',
-  '已到港': '#06b6d4',
-  '已完成': '#16a34a',
-  '已取消': '#ef4444',
-};
+const PROGRESS_STEPS = [
+  { key: 'quote_confirmed', label: '已收到返单工厂单价交期', type: 'check' },
+  { key: 'pi_sent', label: 'PI已发送', type: 'check' },
+  { key: 'po_received', label: 'PO已收到', type: 'check' },
+  { key: 'recheck_price', label: '已复核单价交期', type: 'check' },
+  { key: 'contract_drafted', label: '已撰写采购合同', type: 'check' },
+  { key: 'contract_stamped', label: '合同已敲章', type: 'check' },
+  { key: 'countersigned', label: '供应商已提供回签', type: 'check' },
+  { key: 'packaging', label: '包材进度', type: 'select', doneValue: '制版已确认',
+    options: ['沿用老设计', '客户修改设计中', '我们的设计师修改设计中', '设计文件已发给对应包装厂', '包装厂已制作出制版', '制版已确认'] },
+  { key: 'bulk_prod', label: '大货制作', type: 'select', doneValue: '大货制作完毕', options: ['大货制作中', '大货制作完毕'] },
+  { key: 'bulk_sample', label: '大货样', type: 'select', doneValue: '大货样已寄出', options: ['大货样未寄出', '大货样已寄出'] },
+  { key: 'bulk_photos', label: '大货照', type: 'select', doneValue: '大货照已齐', options: ['大货照未齐', '大货照已齐'] },
+  { key: 'warehouse_receipt', label: '进仓单', type: 'select', doneValue: '进仓单已发', options: ['进仓单未发', '进仓单已发'] },
+  { key: 'warehouse', label: '进仓', type: 'select', doneValue: '已进仓', options: ['未进仓', '已进仓'] },
+  { key: 'inspection', label: '验货', type: 'select', doneValue: '本人已验货', options: ['本人未验货', '本人已验货'] },
+];
 
-let orders = [];
-let viewMode = 'table';   // 'table' | 'kanban'
-let filters = { search: '', status: '' };
-let sort = { field: 'created_at', dir: 'desc' };
-let currentPage = 1;
+const ITEM_FIELDS = [
+  { key: 'item_no', label: '货号' },
+  { key: 'description', label: '产品描述', span: 2 },
+  { key: 'unit', label: '计量单位' },
+  { key: 'pack_size', label: '装量', num: true },
+  { key: 'boxes', label: '箱数', num: true },
+  { key: 'total_qty', label: '总数(装量×箱数)', readonly: true },
+  { key: 'unit_price', label: '单价(含税)', num: true },
+  { key: 'amount', label: '金额(总数×单价)', readonly: true },
+  { key: 'delivery_date', label: '交货日期', type: 'date' },
+  { key: 'ship_date', label: '船期', type: 'date' },
+  { key: 'ean_each', label: 'EAN/EACH条码' },
+  { key: 'mid_box_barcode', label: '中盒条码' },
+  { key: 'outer_itf14', label: '外箱ITF-14条码' },
+  { key: 'lot_no', label: 'LOT号' },
+  { key: 'packaging_req', label: '包装要求', span: 3 },
+  { key: 'order_type', label: '订单类型', type: 'select', options: ORDER_TYPES },
+];
+
+let contracts = [];
 let editingId = null;
-let currentModule = 'orders';   // 'orders' | 'contracts'
-const PAGE_SIZE = 20;
+let currentModule = 'contracts';
+let trackContractId = null;
+let trackItemId = null;
 
 const $ = s => document.querySelector(s);
 const $$ = s => Array.from(document.querySelectorAll(s));
@@ -42,39 +64,17 @@ function escapeHtml(s) {
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 function fmtDate(s) { return s || '—'; }
-function autoOrderNo() {
-  const d = new Date();
-  const p = n => String(n).padStart(2, '0');
-  return 'PO-' + d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) +
-    '-' + Math.random().toString(36).slice(2, 5).toUpperCase();
-}
-function daysUntil(dateStr) {
-  if (!dateStr) return null;
-  const d = new Date(dateStr + 'T00:00:00');
-  const t = new Date(); t.setHours(0, 0, 0, 0);
-  return Math.round((d - t) / 86400000);
-}
-function statusBadge(status) {
-  const c = STATUS_COLORS[status] || '#8b95a3';
-  return `<span class="status-badge" style="background:${c}1a;color:${c};border:1px solid ${c}40">${escapeHtml(status)}</span>`;
-}
 
 /* ---------- 数据加载 ---------- */
 async function refresh() {
   try {
-    orders = await Storage.getAll('orders');
-    render();
+    contracts = await Storage.getAll('contracts');
+    renderList();
+    renderTracking();
   } catch (err) {
     console.error(err);
-    toast('加载数据失败：' + err.message, true);
+    toast('加载失败：' + err.message, true);
   }
-}
-
-function render() {
-  renderModeBadge();
-  renderStats();
-  if (viewMode === 'table') renderTable();
-  else renderKanban();
 }
 
 function renderModeBadge() {
@@ -88,171 +88,197 @@ function renderModeBadge() {
   }
 }
 
-/* ---------- 统计卡片 ---------- */
-function renderStats() {
-  const total = orders.length;
-  const countBy = s => orders.filter(o => o.status === s).length;
-  const warning = orders.filter(o => {
-    const d = daysUntil(o.delivery_date);
-    return d !== null && d <= 7 && !FINISHED_STATUSES.includes(o.status);
-  }).length;
-
-  const cards = [
-    { label: '订单总数', value: total, color: '#2563eb' },
-    { label: '待跟进', value: countBy('待跟进'), color: '#8b95a3' },
-    { label: '生产中', value: countBy('生产中'), color: '#f59e0b' },
-    { label: '已发货', value: countBy('已发货'), color: '#22c55e' },
-    { label: '交期预警（7天内）', value: warning, color: warning > 0 ? '#ef4444' : '#16a34a' },
-  ];
-  $('#stats').innerHTML = cards.map(c =>
-    `<div class="stat-card"><div class="stat-value" style="color:${c.color}">${c.value}</div><div class="stat-label">${c.label}</div></div>`
-  ).join('');
+function progressDone(item) {
+  const p = item.progress || {};
+  let done = 0;
+  PROGRESS_STEPS.forEach(s => {
+    if (s.type === 'check') { if (p[s.key] === true) done++; }
+    else if (p[s.key] === s.doneValue) done++;
+  });
+  return done;
 }
 
-/* ---------- 筛选 / 排序 ---------- */
-function getFiltered() {
-  const s = filters.search.trim().toLowerCase();
-  let list = orders.filter(o => {
-    if (filters.status && o.status !== filters.status) return false;
-    if (s) {
-      const hay = [o.order_no, o.customer, o.product, o.country, o.remark].join(' ').toLowerCase();
-      if (!hay.includes(s)) return false;
-    }
+/* ---------- 模块一：合同管理 ---------- */
+function renderList() {
+  const q = $('#searchInput').value.trim().toLowerCase();
+  const type = $('#typeFilter').value;
+  const list = contracts.filter(c => {
+    const items = Array.isArray(c.items) ? c.items : [];
+    const hay = (c.sales_order_no + ' ' + c.supplier + ' ' + items.map(i => i.item_no).join(' ')).toLowerCase();
+    if (q && !hay.includes(q)) return false;
+    if (type && !items.some(i => i.order_type === type)) return false;
     return true;
   });
-  const f = sort.field, dir = sort.dir === 'asc' ? 1 : -1;
-  list.sort((a, b) => cmp(a, b, f) * dir);
-  return list;
-}
 
-function cmp(a, b, field) {
-  let va = a[field], vb = b[field];
-  if (va == null) va = ''; if (vb == null) vb = '';
-  if (field === 'quantity' || field === 'amount') {
-    const na = parseFloat(String(va).replace(/[^0-9.-]/g, ''));
-    const nb = parseFloat(String(vb).replace(/[^0-9.-]/g, ''));
-    if (!isNaN(na) && !isNaN(nb)) return na - nb;
-  }
-  return String(va).localeCompare(String(vb), 'zh-CN');
-}
+  const rows = list.length ? list.map(c => {
+    const items = Array.isArray(c.items) ? c.items : [];
+    const itemNos = items.map(i => i.item_no || '—').join('、');
+    return `<tr>
+      <td>${escapeHtml(c.sales_order_no || '—')}</td>
+      <td class="strong">${escapeHtml(c.supplier || '—')}</td>
+      <td>${fmtDate(c.sign_date)}</td>
+      <td class="cell-wrap">${escapeHtml(itemNos)}</td>
+      <td class="ops">
+        <button class="btn-mini" data-edit="${c.id}">查看/编辑</button>
+        <button class="btn-mini danger" data-del="${c.id}">删除</button>
+      </td>
+    </tr>`;
+  }).join('')
+    : `<tr><td colspan="5" class="empty">暂无合同，点右上角「+ 新增合同」开始</td></tr>`;
 
-/* ---------- 表格视图 ---------- */
-function renderTable() {
-  const list = getFiltered();
-  const totalPages = Math.max(1, Math.ceil(list.length / PAGE_SIZE));
-  if (currentPage > totalPages) currentPage = totalPages;
-  const start = (currentPage - 1) * PAGE_SIZE;
-  const pageItems = list.slice(start, start + PAGE_SIZE);
-
-  const columns = [
-    { key: 'order_no', label: '订单号' },
-    { key: 'customer', label: '客户名称' },
-    { key: 'country', label: '国家' },
-    { key: 'product', label: '产品' },
-    { key: 'quantity', label: '数量' },
-    { key: 'amount', label: '金额' },
-    { key: 'order_date', label: '下单日期' },
-    { key: 'delivery_date', label: '交期' },
-    { key: 'status', label: '状态' },
-  ];
-  const head = columns.map(c => {
-    const arrow = sort.field === c.key ? (sort.dir === 'asc' ? ' ▲' : ' ▼') : '';
-    return `<th data-sort="${c.key}" class="sortable">${c.label}${arrow}</th>`;
-  }).join('') + '<th style="width:120px">操作</th>';
-
-  const body = pageItems.length
-    ? pageItems.map(o => `
-      <tr>
-        <td>${escapeHtml(o.order_no || '—')}</td>
-        <td class="strong">${escapeHtml(o.customer || '—')}</td>
-        <td>${escapeHtml(o.country || '—')}</td>
-        <td>${escapeHtml(o.product || '—')}</td>
-        <td>${escapeHtml(o.quantity || '—')}</td>
-        <td>${escapeHtml(o.amount || '—')}</td>
-        <td>${fmtDate(o.order_date)}</td>
-        <td>${fmtDate(o.delivery_date)}</td>
-        <td>${statusBadge(o.status)}</td>
-        <td class="ops">
-          <button class="btn-mini" data-edit="${o.id}">编辑</button>
-          <button class="btn-mini danger" data-del="${o.id}">删除</button>
-        </td>
-      </tr>`).join('')
-    : `<tr><td colspan="10" class="empty">暂无数据，点击右上角「+ 新增订单」开始</td></tr>`;
-
-  $('#viewContainer').innerHTML = `
+  $('#contractList').innerHTML = `
     <div class="table-wrap">
       <table class="data-table">
-        <thead><tr>${head}</tr></thead>
-        <tbody>${body}</tbody>
+        <thead><tr>
+          <th>销售单号</th><th>供应商</th><th>签订日期</th><th>货号</th><th style="width:150px">操作</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
       </table>
-    </div>
-    <div class="pagination">
-      <span>共 ${list.length} 条</span>
-      <div class="page-btns">
-        <button class="btn" data-page="prev" ${currentPage <= 1 ? 'disabled' : ''}>上一页</button>
-        <span class="page-info">${currentPage} / ${totalPages}</span>
-        <button class="btn" data-page="next" ${currentPage >= totalPages ? 'disabled' : ''}>下一页</button>
-      </div>
     </div>`;
 }
 
-/* ---------- 看板视图 ---------- */
-function renderKanban() {
-  const filtered = getFiltered();
-  const cols = ORDER_STATUSES.map(status => {
-    const items = filtered.filter(o => o.status === status);
-    return `
-      <div class="kanban-col" data-status="${status}">
-        <div class="kanban-col-head">
-          <span class="dot" style="background:${STATUS_COLORS[status]}"></span>
-          <span class="kanban-col-title">${status}</span>
-          <span class="count">${items.length}</span>
-          <button class="kanban-add" data-add-status="${status}" title="在此状态下新增">+</button>
+/* ---------- 模块二：进度追踪 ---------- */
+function renderTracking() {
+  const q = $('#trackSearch').value.trim().toLowerCase();
+  const type = $('#trackTypeFilter').value;
+  const rows = [];
+  contracts.forEach(c => {
+    (Array.isArray(c.items) ? c.items : []).forEach((it, idx) => {
+      if (type && it.order_type !== type) return;
+      const hay = ((c.sales_order_no || '') + ' ' + (it.item_no || '')).toLowerCase();
+      if (q && !hay.includes(q)) return;
+      rows.push({ c, it, idx });
+    });
+  });
+
+  const body = rows.length ? rows.map(r => {
+    const done = progressDone(r.it);
+    const pct = Math.round(done / PROGRESS_STEPS.length * 100);
+    return `<tr>
+      <td>${escapeHtml(r.c.sales_order_no || '—')}</td>
+      <td class="strong">${escapeHtml(r.it.item_no || '—')}</td>
+      <td>${escapeHtml(r.it.order_type || '未定')}</td>
+      <td>${fmtDate(r.it.delivery_date)}</td>
+      <td class="cell-progress">
+        <div class="track-progress">
+          <div class="bar"><div class="fill" style="width:${pct}%"></div></div>
+          <span>${done}/${PROGRESS_STEPS.length}</span>
         </div>
-        <div class="kanban-body">
-          ${items.map(o => `
-            <div class="kanban-card" draggable="true" data-id="${o.id}" data-edit="${o.id}" title="拖拽可改状态，点击可编辑">
-              <div class="kanban-card-title">${escapeHtml(o.customer || '—')}</div>
-              <div class="kanban-card-sub">${escapeHtml(o.order_no || '—')}</div>
-              <div class="kanban-card-sub">${escapeHtml(o.product || '—')}</div>
-              <div class="kanban-card-foot">
-                <span>交期 ${fmtDate(o.delivery_date)}</span>
-                <span>${o.delivery_date && daysUntil(o.delivery_date) !== null && daysUntil(o.delivery_date) <= 7 && !FINISHED_STATUSES.includes(o.status) ? '⚠️' : ''}</span>
-              </div>
-            </div>`).join('')}
-        </div>
-      </div>`;
-  }).join('');
-  $('#viewContainer').innerHTML = `<div class="kanban">${cols}</div>`;
+      </td>
+      <td class="ops">
+        <button class="btn-mini" data-track="${r.c.id}" data-item-id="${r.it.id}">更新进度</button>
+      </td>
+    </tr>`;
+  }).join('')
+    : `<tr><td colspan="6" class="empty">暂无货号可追踪，请先在「合同管理」新增合同</td></tr>`;
+
+  $('#trackList').innerHTML = `
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead><tr>
+          <th>销售单号</th><th>货号</th><th>订单类型</th><th>交货日期</th><th>进度</th><th style="width:120px">操作</th>
+        </tr></thead>
+        <tbody>${body}</tbody>
+      </table>
+    </div>`;
 }
 
-/* ---------- 弹窗：新增 / 编辑 ---------- */
-function openAdd(status) {
+/* ---------- 合同管理：货号明细渲染 ---------- */
+function itemCardHtml(item = {}) {
+  const fields = ITEM_FIELDS.map(f => {
+    const val = item[f.key] == null ? '' : item[f.key];
+    const cls = f.span ? ` item-field span${f.span}` : ' item-field';
+    let control;
+    if (f.type === 'date') {
+      control = `<input type="date" data-item-field="${f.key}" value="${escapeHtml(val)}">`;
+    } else if (f.type === 'select') {
+      control = `<select data-item-field="${f.key}">${f.options.map(o => `<option ${o === val ? 'selected' : ''}>${o}</option>`).join('')}</select>`;
+    } else {
+      control = `<input type="text" ${f.num ? 'inputmode="decimal"' : ''} ${f.readonly ? 'readonly' : ''} data-item-field="${f.key}" value="${escapeHtml(val)}">`;
+    }
+    return `<label class="${cls}">${f.label}${control}</label>`;
+  }).join('');
+
+  return `
+    <div class="item-card" data-item-id="${item.id || ''}">
+      <div class="item-card-head">
+        <span class="item-idx"></span>
+        <button class="btn-mini danger" type="button" data-item-remove>删除此货号</button>
+      </div>
+      <div class="item-grid">${fields}</div>
+    </div>`;
+}
+
+function addItem(item = {}) {
+  if (!item.id) item.id = genId();
+  const holder = document.createElement('div');
+  holder.innerHTML = itemCardHtml(item);
+  $('#itemsContainer').appendChild(holder.firstElementChild);
+  renumberItems();
+}
+
+function renumberItems() {
+  $$('#itemsContainer .item-card').forEach((card, i) => {
+    card.querySelector('.item-idx').textContent = '货号 ' + (i + 1);
+  });
+}
+
+function recompute(card) {
+  const get = k => {
+    const el = card.querySelector(`[data-item-field="${k}"]`);
+    const n = parseFloat((el && el.value || '').replace(/[^\d.-]/g, ''));
+    return isNaN(n) ? 0 : n;
+  };
+  const set = (k, v) => {
+    const el = card.querySelector(`[data-item-field="${k}"]`);
+    if (el) el.value = v;
+  };
+  const total = get('pack_size') * get('boxes');
+  set('total_qty', total ? String(total) : '');
+  const amount = total * get('unit_price');
+  set('amount', amount ? String(amount) : '');
+}
+
+function collectItems() {
+  return $$('#itemsContainer .item-card').map(card => {
+    const item = { id: card.dataset.itemId || genId() };
+    ITEM_FIELDS.forEach(f => {
+      const el = card.querySelector(`[data-item-field="${f.key}"]`);
+      item[f.key] = el ? el.value.trim() : '';
+    });
+    return item;
+  }).filter(anyItemValue);
+}
+
+function anyItemValue(item) {
+  return ITEM_FIELDS.some(f => String(item[f.key] || '').trim() !== '');
+}
+
+/* ---------- 合同管理：弹窗 ---------- */
+function openAdd() {
   editingId = null;
-  $('#modalTitle').textContent = '新增订单';
-  $('#orderForm').reset();
-  $('#f_order_no').value = autoOrderNo();
-  $('#f_status').value = status || ORDER_STATUSES[0];
+  $('#modalTitle').textContent = '新增合同';
+  $('#contractForm').reset();
+  $('#f_sales_order_no').value = '';
+  $('#f_supplier').value = '';
+  $('#f_sign_date').value = '';
+  $('#itemsContainer').innerHTML = '';
+  addItem();
   $('#modalMask').hidden = false;
-  $('#f_customer').focus();
+  $('#f_sales_order_no').focus();
 }
 
 function openEdit(id) {
-  const o = orders.find(x => x.id === id);
-  if (!o) return;
+  const c = contracts.find(x => x.id === id);
+  if (!c) return;
   editingId = id;
-  $('#modalTitle').textContent = '编辑订单';
-  $('#f_order_no').value = o.order_no || '';
-  $('#f_customer').value = o.customer || '';
-  $('#f_country').value = o.country || '';
-  $('#f_product').value = o.product || '';
-  $('#f_quantity').value = o.quantity || '';
-  $('#f_amount').value = o.amount || '';
-  $('#f_order_date').value = o.order_date || '';
-  $('#f_delivery_date').value = o.delivery_date || '';
-  $('#f_status').value = o.status || ORDER_STATUSES[0];
-  $('#f_payment').value = o.payment || '';
-  $('#f_remark').value = o.remark || '';
+  $('#modalTitle').textContent = '查看 / 编辑合同';
+  $('#f_sales_order_no').value = c.sales_order_no || '';
+  $('#f_supplier').value = c.supplier || '';
+  $('#f_sign_date').value = c.sign_date || '';
+  $('#itemsContainer').innerHTML = '';
+  const items = (Array.isArray(c.items) && c.items.length) ? c.items : [{}];
+  items.forEach(it => addItem(it));
   $('#modalMask').hidden = false;
 }
 
@@ -261,33 +287,38 @@ function closeModal() {
   editingId = null;
 }
 
-async function onSubmit(e) {
+async function save(e) {
   e.preventDefault();
+  const items = collectItems();
+  if (editingId) {
+    // 编辑时保留原有进度（进度在「进度追踪」模块维护）
+    const orig = contracts.find(x => x.id === editingId);
+    const progById = {};
+    (orig && Array.isArray(orig.items) ? orig.items : []).forEach(it => {
+      if (it.id) progById[it.id] = it.progress || {};
+    });
+    items.forEach(it => { it.progress = progById[it.id] || {}; });
+  }
   const data = {
-    order_no: $('#f_order_no').value.trim(),
-    customer: $('#f_customer').value.trim(),
-    country: $('#f_country').value.trim(),
-    product: $('#f_product').value.trim(),
-    quantity: $('#f_quantity').value.trim(),
-    amount: $('#f_amount').value.trim(),
-    order_date: $('#f_order_date').value,
-    delivery_date: $('#f_delivery_date').value,
-    status: $('#f_status').value,
-    payment: $('#f_payment').value.trim(),
-    remark: $('#f_remark').value.trim(),
+    sales_order_no: $('#f_sales_order_no').value.trim(),
+    supplier: $('#f_supplier').value.trim(),
+    sign_date: $('#f_sign_date').value,
+    items,
   };
-  if (!data.customer) { toast('请至少填写「客户名称」', true); return; }
-
+  if (!data.sales_order_no && !data.supplier && !data.items.length) {
+    toast('请至少填写一项内容', true);
+    return;
+  }
   try {
     if (editingId) {
       data.updated_at = nowISO();
-      await Storage.update('orders', editingId, data);
+      await Storage.update('contracts', editingId, data);
       toast('已保存');
     } else {
       data.id = genId();
       data.created_at = nowISO();
       data.updated_at = nowISO();
-      await Storage.add('orders', data);
+      await Storage.add('contracts', data);
       toast('已新增');
     }
     closeModal();
@@ -298,12 +329,12 @@ async function onSubmit(e) {
   }
 }
 
-async function confirmDelete(id) {
-  const o = orders.find(x => x.id === id);
-  const name = o ? o.customer : '';
-  if (!confirm(`确定删除「${name}」这条订单吗？删除后不可恢复。`)) return;
+async function removeContract(id) {
+  const c = contracts.find(x => x.id === id);
+  const name = c ? (c.sales_order_no || c.supplier || '未命名') : '';
+  if (!confirm(`确定删除合同「${name}」吗？删除后不可恢复。`)) return;
   try {
-    await Storage.remove('orders', id);
+    await Storage.remove('contracts', id);
     toast('已删除');
     await refresh();
   } catch (err) {
@@ -311,112 +342,149 @@ async function confirmDelete(id) {
   }
 }
 
-/* ---------- 提示浮层 ---------- */
-let toastTimer;
-function toast(msg, isError) {
-  const t = $('#toast');
-  t.textContent = msg;
-  t.className = 'toast' + (isError ? ' error' : '');
-  t.hidden = false;
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { t.hidden = true; }, 2600);
+/* ---------- 进度追踪：进度弹窗 ---------- */
+function progressStepsHtml(progress = {}) {
+  return PROGRESS_STEPS.map(s => {
+    if (s.type === 'check') {
+      return `<label class="progress-step">
+        <input type="checkbox" data-progress-check="${s.key}" ${progress[s.key] === true ? 'checked' : ''}>
+        <span>${s.label}</span>
+      </label>`;
+    }
+    const cur = progress[s.key] || '';
+    return `<label class="progress-step select">
+      <span>${s.label}</span>
+      <select data-progress-select="${s.key}">
+        <option value="">未开始</option>
+        ${s.options.map(o => `<option value="${o}" ${o === cur ? 'selected' : ''}>${o}</option>`).join('')}
+      </select>
+    </label>`;
+  }).join('');
 }
 
-/* ---------- 视图切换 ---------- */
-function setView(v) {
-  viewMode = v;
-  $$('.view-btn').forEach(b => b.classList.toggle('active', b.dataset.view === v));
-  render();
+function readProgressFrom(root) {
+  const progress = {};
+  root.querySelectorAll('[data-progress-check]').forEach(cb => { progress[cb.dataset.progressCheck] = cb.checked; });
+  root.querySelectorAll('[data-progress-select]').forEach(sel => { if (sel.value) progress[sel.dataset.progressSelect] = sel.value; });
+  return progress;
+}
+
+function openProgress(contractId, itemId) {
+  const c = contracts.find(x => x.id === contractId);
+  if (!c) return;
+  const it = (c.items || []).find(i => i.id === itemId);
+  if (!it) return;
+  trackContractId = contractId;
+  trackItemId = itemId;
+  $('#progressModalTitle').textContent = '更新进度';
+  $('#progressContext').innerHTML = `
+    <div class="progress-context">
+      <span>销售单号：<b>${escapeHtml(c.sales_order_no || '—')}</b></span>
+      <span>货号：<b>${escapeHtml(it.item_no || '—')}</b></span>
+      <span>类型：<b>${escapeHtml(it.order_type || '未定')}</b></span>
+    </div>`;
+  $('#progressItems').innerHTML = progressStepsHtml(it.progress || {});
+  $('#progressModalMask').hidden = false;
+}
+
+function closeProgress() {
+  $('#progressModalMask').hidden = true;
+  trackContractId = null;
+  trackItemId = null;
+}
+
+async function saveProgress(e) {
+  e.preventDefault();
+  const progress = readProgressFrom($('#progressItems'));
+  const c = contracts.find(x => x.id === trackContractId);
+  if (!c) { closeProgress(); return; }
+  const items = (c.items || []).map(it => it.id === trackItemId ? { ...it, progress } : it);
+  try {
+    await Storage.update('contracts', c.id, { items, updated_at: nowISO() });
+    toast('进度已更新');
+    closeProgress();
+    await refresh();
+  } catch (err) {
+    console.error(err);
+    toast('保存失败：' + err.message, true);
+  }
 }
 
 /* ---------- 模块切换 ---------- */
 function setModule(m) {
   currentModule = m;
-  $$('.module-tab').forEach(t => t.classList.toggle('active', t.dataset.module === m));
-  $('#module-orders').hidden = m !== 'orders';
+  $$('.side-nav-item').forEach(b => b.classList.toggle('active', b.dataset.module === m));
   $('#module-contracts').hidden = m !== 'contracts';
-  $('#btnAdd').textContent = m === 'orders' ? '+ 新增订单' : '+ 上传合同';
+  $('#module-tracking').hidden = m !== 'tracking';
+}
+
+/* ---------- 提示浮层 ---------- */
+function toast(msg, isError) {
+  const t = $('#toast');
+  t.textContent = msg;
+  t.className = 'toast' + (isError ? ' error' : '');
+  t.hidden = false;
+  clearTimeout(toast._timer);
+  toast._timer = setTimeout(() => { t.hidden = true; }, 2600);
 }
 
 /* ---------- 事件绑定 ---------- */
 function bindEvents() {
   document.addEventListener('click', e => {
-    const editBtn = e.target.closest('[data-edit]');
-    if (editBtn) { openEdit(editBtn.dataset.edit); return; }
-    const delBtn = e.target.closest('[data-del]');
-    if (delBtn) { confirmDelete(delBtn.dataset.del); return; }
-    const addStatus = e.target.closest('[data-add-status]');
-    if (addStatus) { openAdd(addStatus.dataset.addStatus); return; }
-    const pageBtn = e.target.closest('[data-page]');
-    if (pageBtn && !pageBtn.disabled) {
-      currentPage += pageBtn.dataset.page === 'prev' ? -1 : 1;
-      render(); return;
-    }
-    const sortTh = e.target.closest('th[data-sort]');
-    if (sortTh) {
-      const key = sortTh.dataset.sort;
-      if (sort.field === key) sort.dir = sort.dir === 'asc' ? 'desc' : 'asc';
-      else { sort.field = key; sort.dir = 'asc'; }
-      render(); return;
-    }
-    const moduleTab = e.target.closest('.module-tab');
-    if (moduleTab) { setModule(moduleTab.dataset.module); return; }
-    const viewBtn = e.target.closest('[data-view]');
-    if (viewBtn) { setView(viewBtn.dataset.view); return; }
-  });
-
-  /* 看板拖拽改状态 */
-  document.addEventListener('dragstart', e => {
-    const card = e.target.closest('.kanban-card');
-    if (card) { e.dataTransfer.setData('text/plain', card.dataset.id); card.classList.add('dragging'); }
-  });
-  document.addEventListener('dragend', e => {
-    const card = e.target.closest('.kanban-card');
-    if (card) card.classList.remove('dragging');
-  });
-  document.addEventListener('dragover', e => {
-    if (e.target.closest('.kanban-col')) e.preventDefault();
-  });
-  document.addEventListener('drop', async e => {
-    const col = e.target.closest('.kanban-col');
-    if (!col) return;
-    e.preventDefault();
-    const id = e.dataTransfer.getData('text/plain');
-    if (!id) return;
-    const status = col.dataset.status;
-    const o = orders.find(x => x.id === id);
-    if (o && o.status !== status) {
-      await Storage.update('orders', id, { status });
-      await refresh();
+    const nav = e.target.closest('.side-nav-item');
+    if (nav) { setModule(nav.dataset.module); return; }
+    const edit = e.target.closest('[data-edit]');
+    if (edit) { openEdit(edit.dataset.edit); return; }
+    const del = e.target.closest('[data-del]');
+    if (del) { removeContract(del.dataset.del); return; }
+    const track = e.target.closest('[data-track]');
+    if (track) { openProgress(track.dataset.track, track.dataset.itemId); return; }
+    const rm = e.target.closest('[data-item-remove]');
+    if (rm) {
+      const cards = $$('#itemsContainer .item-card');
+      if (cards.length > 1) { rm.closest('.item-card').remove(); renumberItems(); }
+      else toast('至少保留一个货号', true);
+      return;
     }
   });
 
-  $('#orderForm').addEventListener('submit', onSubmit);
+  $('#btnAdd').addEventListener('click', openAdd);
+  $('#btnAddItem').addEventListener('click', () => addItem());
   $('#modalClose').addEventListener('click', closeModal);
   $('#modalCancel').addEventListener('click', closeModal);
   $('#modalMask').addEventListener('click', e => { if (e.target === $('#modalMask')) closeModal(); });
-  $('#btnAdd').addEventListener('click', () => {
-    if (currentModule === 'orders') openAdd();
-    else if (window.ContractApp) ContractApp.openUpload();
-  });
+  $('#contractForm').addEventListener('submit', save);
 
-  $('#searchInput').addEventListener('input', e => { filters.search = e.target.value; currentPage = 1; render(); });
-  $('#statusFilter').addEventListener('change', e => { filters.status = e.target.value; currentPage = 1; render(); });
+  $('#progressModalClose').addEventListener('click', closeProgress);
+  $('#progressModalCancel').addEventListener('click', closeProgress);
+  $('#progressModalMask').addEventListener('click', e => { if (e.target === $('#progressModalMask')) closeProgress(); });
+  $('#progressForm').addEventListener('submit', saveProgress);
+
+  $('#searchInput').addEventListener('input', renderList);
+  $('#typeFilter').addEventListener('change', renderList);
+  $('#trackSearch').addEventListener('input', renderTracking);
+  $('#trackTypeFilter').addEventListener('change', renderTracking);
+
+  $('#itemsContainer').addEventListener('input', e => {
+    const f = e.target.dataset && e.target.dataset.itemField;
+    if (f === 'pack_size' || f === 'boxes' || f === 'unit_price') recompute(e.target.closest('.item-card'));
+  });
 }
 
-function populateSelects() {
-  const opts = ORDER_STATUSES.map(s => `<option value="${s}">${s}</option>`).join('');
-  $('#statusFilter').innerHTML = '<option value="">全部状态</option>' + opts;
-  $('#f_status').innerHTML = opts;
+function populateFilters() {
+  const opts = '<option value="">全部类型</option>' +
+    ORDER_TYPES.map(t => `<option value="${t}">${t}</option>`).join('');
+  $('#typeFilter').innerHTML = opts;
+  $('#trackTypeFilter').innerHTML = opts;
 }
 
 /* ---------- 启动 ---------- */
 async function init() {
   Storage.init();
-  populateSelects();
+  renderModeBadge();
+  populateFilters();
   bindEvents();
-  setModule('orders');
-  if (window.ContractApp) await ContractApp.init();
+  setModule('contracts');
   await refresh();
 }
 document.addEventListener('DOMContentLoaded', init);

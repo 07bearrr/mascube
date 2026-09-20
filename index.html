@@ -3,95 +3,81 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>外贸跟单管理</title>
+  <title>业务员辅助系统</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <header class="topbar">
-    <div class="brand">
-      <h1>外贸跟单管理</h1>
-      <span id="modeBadge" class="badge mode"></span>
-    </div>
-    <div class="topbar-actions">
-      <nav class="module-tabs">
-        <button class="module-tab active" data-module="orders">📋 跟单进度</button>
-        <button class="module-tab" data-module="contracts">📄 合同识别</button>
+  <div class="layout">
+    <!-- 左侧导航栏 -->
+    <aside class="sidebar">
+      <div class="sidebar-brand">
+        <div class="sidebar-logo">📋</div>
+        <h1>业务员辅助系统</h1>
+      </div>
+      <nav class="side-nav">
+        <button class="side-nav-item active" data-module="contracts">📦 合同管理</button>
+        <button class="side-nav-item" data-module="tracking">📈 进度追踪</button>
       </nav>
-      <button class="btn btn-primary" id="btnAdd">+ 新增订单</button>
-    </div>
-  </header>
+      <div class="sidebar-foot">
+        <span id="modeBadge" class="badge mode"></span>
+      </div>
+    </aside>
 
-  <main class="container">
-    <!-- 模块一：跟单进度 -->
-    <section class="module-panel" id="module-orders">
-      <!-- 统计卡片 -->
-      <section class="stats" id="stats"></section>
-
-      <!-- 工具栏：视图切换 / 搜索 / 筛选 -->
-      <section class="toolbar">
-        <div class="view-toggle">
-          <button class="view-btn active" data-view="table">📋 表格</button>
-          <button class="view-btn" data-view="kanban">📌 看板</button>
-        </div>
-        <input type="search" id="searchInput" class="search" placeholder="搜索订单号 / 客户 / 产品 / 国家">
-        <select id="statusFilter" class="select"></select>
+    <!-- 主内容区 -->
+    <main class="main">
+      <!-- 模块一：合同管理 -->
+      <section id="module-contracts" class="module-panel">
+        <header class="page-head">
+          <h2>合同管理</h2>
+          <button class="btn btn-primary" id="btnAdd">+ 新增合同</button>
+        </header>
+        <section class="toolbar">
+          <input type="search" id="searchInput" class="search" placeholder="搜索销售单号 / 供应商 / 货号">
+          <select id="typeFilter" class="select"></select>
+        </section>
+        <section id="contractList"></section>
       </section>
 
-      <!-- 视图内容区 -->
-      <section id="viewContainer"></section>
-    </section>
-
-    <!-- 模块二：合同识别 -->
-    <section class="module-panel" id="module-contracts" hidden>
-      <section class="toolbar">
-        <input type="search" id="contractSearch" class="search" placeholder="搜索销售单号 / 乙方">
-        <button class="btn btn-primary" id="btnUploadContract">📄 上传合同</button>
+      <!-- 模块二：进度追踪 -->
+      <section id="module-tracking" class="module-panel" hidden>
+        <header class="page-head">
+          <h2>进度追踪</h2>
+        </header>
+        <section class="toolbar">
+          <input type="search" id="trackSearch" class="search" placeholder="搜索销售单号 / 货号">
+          <select id="trackTypeFilter" class="select"></select>
+        </section>
+        <section id="trackList"></section>
       </section>
-      <section id="contractList"></section>
-    </section>
-  </main>
+    </main>
+  </div>
 
-  <!-- 新增 / 编辑订单弹窗 -->
+  <!-- 合同表单弹窗 -->
   <div class="modal-mask" id="modalMask" hidden>
-    <div class="modal">
+    <div class="modal contract-modal">
       <div class="modal-head">
-        <h2 id="modalTitle">新增订单</h2>
+        <h2 id="modalTitle">新增合同</h2>
         <button class="close" id="modalClose" type="button">×</button>
       </div>
-      <form id="orderForm" class="form-grid">
-        <label>订单号
-          <input id="f_order_no" type="text" placeholder="留空则自动生成">
+      <form id="contractForm" class="form-grid">
+        <label>销售单号
+          <input id="f_sales_order_no" type="text" placeholder="如 SO-2024-001">
         </label>
-        <label>客户名称 <span class="req">*</span>
-          <input id="f_customer" type="text" placeholder="必填">
+        <label>供应商
+          <input id="f_supplier" type="text" placeholder="如 XX工厂">
         </label>
-        <label>国家/地区
-          <input id="f_country" type="text" placeholder="如 美国">
+        <label>签订日期
+          <input id="f_sign_date" type="date">
         </label>
-        <label>产品名称
-          <input id="f_product" type="text" placeholder="如 不锈钢水杯">
-        </label>
-        <label>数量
-          <input id="f_quantity" type="text" placeholder="如 5000 个">
-        </label>
-        <label>订单金额
-          <input id="f_amount" type="text" placeholder="如 $12,500">
-        </label>
-        <label>下单日期
-          <input id="f_order_date" type="date">
-        </label>
-        <label>交期
-          <input id="f_delivery_date" type="date">
-        </label>
-        <label>进度状态
-          <select id="f_status"></select>
-        </label>
-        <label>付款方式
-          <input id="f_payment" type="text" placeholder="如 30%预付+70%见提单">
-        </label>
-        <label class="span2">备注
-          <textarea id="f_remark" rows="3" placeholder="自由填写"></textarea>
-        </label>
+
+        <div class="span2 items-section">
+          <div class="items-head">
+            <strong>产品信息</strong>
+            <button class="btn-mini" id="btnAddItem" type="button">+ 添加货号</button>
+          </div>
+          <div id="itemsContainer"></div>
+        </div>
+
         <div class="form-actions span2">
           <button type="button" class="btn" id="modalCancel">取消</button>
           <button type="submit" class="btn btn-primary">保存</button>
@@ -100,56 +86,23 @@
     </div>
   </div>
 
-  <!-- 合同识别弹窗 -->
-  <div class="modal-mask" id="contractModalMask" hidden>
-    <div class="modal contract-modal">
+  <!-- 进度更新弹窗 -->
+  <div class="modal-mask" id="progressModalMask" hidden>
+    <div class="modal">
       <div class="modal-head">
-        <h2 id="contractModalTitle">上传合同</h2>
-        <button class="close" id="contractModalClose" type="button">×</button>
+        <h2 id="progressModalTitle">更新进度</h2>
+        <button class="close" id="progressModalClose" type="button">×</button>
       </div>
-      <div class="contract-body">
-        <div class="dropzone" id="dropzone">
-          <div class="dz-icon">📄</div>
-          <div>点击选择 或 拖拽合同文件到这里</div>
-          <div class="muted">支持 JPG / PNG / PDF，可一次传多张</div>
-          <input type="file" id="contractFileInput" accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf" multiple hidden>
+      <form id="progressForm" class="form-grid">
+        <div class="span2" id="progressContext"></div>
+        <div class="span2">
+          <div class="progress-list" id="progressItems"></div>
         </div>
-        <div class="file-list" id="contractFileList"></div>
-
-        <div class="recognize-bar">
-          <button class="btn btn-primary" id="btnRecognize" type="button">🔍 智能识别</button>
-          <span class="ocr-status" id="ocrStatus"></span>
+        <div class="form-actions span2">
+          <button type="button" class="btn" id="progressModalCancel">取消</button>
+          <button type="submit" class="btn btn-primary">保存进度</button>
         </div>
-        <details class="ocr-raw" id="ocrRawBox" hidden>
-          <summary>查看识别出的原始文字（用来对照核对）</summary>
-          <pre id="ocrRawText"></pre>
-        </details>
-
-        <form id="contractForm" class="form-grid">
-          <label>销售单号
-            <input id="cf_sales_order_no" type="text" placeholder="自动识别或手动填写">
-          </label>
-          <label>乙方
-            <input id="cf_party_b" type="text" placeholder="自动识别或手动填写">
-          </label>
-          <label>交货日期
-            <input id="cf_delivery_date" type="date">
-          </label>
-
-          <div class="span2 items-section">
-            <div class="items-head">
-              <strong>货号明细</strong>
-              <button class="btn-mini" id="btnAddItem" type="button">+ 添加一行</button>
-            </div>
-            <div id="itemsContainer"></div>
-          </div>
-
-          <div class="form-actions span2">
-            <button type="button" class="btn" id="contractModalCancel">取消</button>
-            <button type="submit" class="btn btn-primary">保存</button>
-          </div>
-        </form>
-      </div>
+      </form>
     </div>
   </div>
 
@@ -159,8 +112,5 @@
   <script src="config.js"></script>
   <script src="storage.js"></script>
   <script src="app.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js" async></script>
-  <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js" async></script>
-  <script src="contract.js"></script>
 </body>
 </html>

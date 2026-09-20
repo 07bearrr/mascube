@@ -1,9 +1,6 @@
 /* ============================================================
    数据存储层：本地 localStorage 或 云端 Supabase 二选一
-   支持多个数据集合（orders / contracts），并支持文件上传。
-
-   对外方法都带 collection 参数（如 'orders' / 'contracts'）：
-   getAll / add / update / remove / uploadFile
+   支持多个数据集合，方法都带 collection 参数。
    ============================================================ */
 const Storage = (() => {
   const LOCAL_PREFIX = 'mascube_';
@@ -101,47 +98,5 @@ const Storage = (() => {
     localSet(collection, localGet(collection).filter(r => r.id !== id));
   }
 
-  /* ---------- 文件存储（合同原文件） ---------- */
-  function fileToDataUrl(file) {
-    return new Promise((resolve, reject) => {
-      const r = new FileReader();
-      r.onload = () => resolve(r.result);
-      r.onerror = reject;
-      r.readAsDataURL(file);
-    });
-  }
-
-  // 返回 { name, type, size, url?, path?, dataUrl? }
-  async function uploadFile(file) {
-    if (useCloud) {
-      const base = cfg.supabaseUrl.replace(/\/+$/, '');
-      const bucket = cfg.storageBucket || 'contract-files';
-      const safe = (file.name || 'file').replace(/[^\w.\-一-龥]+/g, '_');
-      const path = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${safe}`;
-      const res = await fetch(`${base}/storage/v1/object/${bucket}/${path}`, {
-        method: 'POST',
-        headers: {
-          apikey: cfg.supabaseAnonKey,
-          Authorization: 'Bearer ' + cfg.supabaseAnonKey,
-          'Content-Type': file.type || 'application/octet-stream',
-        },
-        body: file,
-      });
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error('上传文件失败：' + text);
-      }
-      return {
-        name: file.name,
-        type: file.type,
-        size: file.size,
-        path,
-        url: `${base}/storage/v1/object/public/${bucket}/${path}`,
-      };
-    }
-    const dataUrl = await fileToDataUrl(file);
-    return { name: file.name, type: file.type, size: file.size, dataUrl };
-  }
-
-  return { init, isCloud, getAll, add, update, remove, uploadFile };
+  return { init, isCloud, getAll, add, update, remove };
 })();
