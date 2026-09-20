@@ -410,12 +410,53 @@ async function saveProgress(e) {
   }
 }
 
+/* ---------- 模块三：运费计算 ---------- */
+const FREIGHT_KEY = 'mascube_freight_settings';
+const FREIGHT_DEFAULTS = { truck_price: '2000', exchange_rate: '6.7' };
+
+function loadFreightSettings() {
+  let saved = {};
+  try { saved = JSON.parse(localStorage.getItem(FREIGHT_KEY)) || {}; } catch (e) {}
+  const s = { ...FREIGHT_DEFAULTS, ...saved };
+  if (s.truck_price === '' || s.truck_price == null) s.truck_price = FREIGHT_DEFAULTS.truck_price;
+  if (s.exchange_rate === '' || s.exchange_rate == null) s.exchange_rate = FREIGHT_DEFAULTS.exchange_rate;
+  return s;
+}
+function saveFreightSettings(s) {
+  localStorage.setItem(FREIGHT_KEY, JSON.stringify(s));
+}
+function updateFreightSetting(key, value) {
+  const s = loadFreightSettings();
+  s[key] = value;
+  saveFreightSettings(s);
+}
+function fmtMoney(n) {
+  return '¥' + (Math.round(n * 100) / 100).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+function computeFreight() {
+  const vol = parseFloat($('#f_volume').value) || 0;
+  const truck = parseFloat($('#f_truck_price').value) || 0;
+  const rate = parseFloat($('#f_rate').value) || 0;
+  const land = vol / 68 * truck * rate;
+  const sea = vol / 68 * 2800 * rate;
+  $('#f_land').textContent = fmtMoney(land);
+  $('#f_sea').textContent = fmtMoney(sea);
+  $('#f_total').textContent = fmtMoney(land + sea);
+}
+function initFreight() {
+  const s = loadFreightSettings();
+  $('#f_truck_price').value = s.truck_price;
+  $('#f_rate').value = s.exchange_rate;
+  computeFreight();
+}
+
 /* ---------- 模块切换 ---------- */
 function setModule(m) {
   currentModule = m;
   $$('.side-nav-item').forEach(b => b.classList.toggle('active', b.dataset.module === m));
   $('#module-contracts').hidden = m !== 'contracts';
   $('#module-tracking').hidden = m !== 'tracking';
+  $('#module-freight').hidden = m !== 'freight';
 }
 
 /* ---------- 提示浮层 ---------- */
@@ -465,6 +506,11 @@ function bindEvents() {
   $('#trackSearch').addEventListener('input', renderTracking);
   $('#trackTypeFilter').addEventListener('change', renderTracking);
 
+  // 运费计算
+  $('#f_volume').addEventListener('input', computeFreight);
+  $('#f_truck_price').addEventListener('input', e => { updateFreightSetting('truck_price', e.target.value); computeFreight(); });
+  $('#f_rate').addEventListener('input', e => { updateFreightSetting('exchange_rate', e.target.value); computeFreight(); });
+
   $('#itemsContainer').addEventListener('input', e => {
     const f = e.target.dataset && e.target.dataset.itemField;
     if (f === 'pack_size' || f === 'boxes' || f === 'unit_price') recompute(e.target.closest('.item-card'));
@@ -484,6 +530,7 @@ async function init() {
   renderModeBadge();
   populateFilters();
   bindEvents();
+  initFreight();
   setModule('contracts');
   await refresh();
 }

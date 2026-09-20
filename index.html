@@ -17,6 +17,7 @@
       <nav class="side-nav">
         <button class="side-nav-item active" data-module="contracts">📦 合同管理</button>
         <button class="side-nav-item" data-module="tracking">📈 进度追踪</button>
+        <button class="side-nav-item" data-module="freight">🚚 运费计算</button>
       </nav>
       <div class="sidebar-foot">
         <span id="modeBadge" class="badge mode"></span>
@@ -48,6 +49,53 @@
           <select id="trackTypeFilter" class="select"></select>
         </section>
         <section id="trackList"></section>
+      </section>
+
+      <!-- 模块三：运费计算 -->
+      <section id="module-freight" class="module-panel" hidden>
+        <header class="page-head">
+          <h2>运费计算</h2>
+        </header>
+        <div class="freight-wrap">
+          <div class="freight-card">
+            <div>
+              <h3 class="freight-title">参数设置<span class="freight-note">修改后自动记住</span></h3>
+              <div class="freight-grid">
+                <label>陆运柜子价格（默认 2000）
+                  <input type="number" id="f_truck_price" step="1" placeholder="2000">
+                </label>
+                <label>汇率（默认 6.7）
+                  <input type="number" id="f_rate" step="0.01" placeholder="6.7">
+                </label>
+                <label>海运柜子价格（固定）
+                  <input type="number" value="2800" disabled>
+                </label>
+              </div>
+            </div>
+            <div>
+              <h3 class="freight-title">计算</h3>
+              <div class="freight-grid">
+                <label>总体积（m³）
+                  <input type="number" id="f_volume" step="0.1" placeholder="如 68">
+                </label>
+              </div>
+            </div>
+            <div class="freight-result">
+              <div class="result-box">
+                <div class="label">陆运费（总体积÷68×柜子价格×汇率）</div>
+                <div class="value" id="f_land">¥0.00</div>
+              </div>
+              <div class="result-box">
+                <div class="label">海运费（总体积÷68×2800×汇率）</div>
+                <div class="value" id="f_sea">¥0.00</div>
+              </div>
+              <div class="result-box total">
+                <div class="label">合计</div>
+                <div class="value" id="f_total">¥0.00</div>
+              </div>
+            </div>
+          </div>
+        </div>
       </section>
     </main>
   </div>
