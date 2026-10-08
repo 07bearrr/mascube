@@ -521,6 +521,325 @@ function initFreight() {
   computeFreight();
 }
 
+/* ---------- 模块四：已有报价 ---------- */
+const QUOTE_FIELDS = [
+  { key: 'item_no', label: '货号' },
+  { key: 'product_name', label: '产品名称', span: 2 },
+  { key: 'supplier_cn', label: '供应商中文' },
+  { key: 'product_spec', label: '产品规格', span: 2 },
+  { key: 'product_packing', label: '产品包装', span: 2 },
+  { key: 'purchase_price', label: '采购单价(¥)', num: true },
+  { key: 'export_price', label: '外销单价($)', num: true },
+  { key: 'moq', label: '最小起订量', num: true },
+  { key: 'unit', label: '单位' },
+  { key: 'inner_box', label: '内盒', num: true },
+  { key: 'ctn_qty', label: '每箱数量', num: true },
+  { key: 'ctn_l', label: '箱长(cm)', num: true },
+  { key: 'ctn_w', label: '箱宽(cm)', num: true },
+  { key: 'ctn_h', label: '箱高(cm)', num: true },
+  { key: 'cbm', label: '立方米 CBM', readonly: true },
+  { key: 'nw', label: '净重(kg)', num: true },
+  { key: 'gw', label: '毛重(kg)', num: true },
+];
+
+let quotes = [];
+let quoteFolders = [];
+let currentFolder = 'all';
+let editingQuoteId = null;
+let editingImages = [];
+let moveQuoteId = null;
+
+async function refreshQuotes() {
+  try {
+    const [q, f] = await Promise.all([Storage.getAll('quotes'), Storage.getAll('quote_folders')]);
+    quotes = q || [];
+    quoteFolders = f || [];
+    renderQuoteFolders();
+    renderQuoteList();
+  } catch (e) {
+    console.error(e);
+    toast('加载报价失败：' + e.message, true);
+  }
+}
+
+function renderQuoteFolders() {
+  const items = [
+    `<button class="folder-item ${currentFolder === 'all' ? 'active' : ''}" data-folder="all">📁 全部报价</button>`,
+    `<button class="folder-item ${currentFolder === 'none' ? 'active' : ''}" data-folder="none">🗂️ 未分类</button>`,
+  ];
+  quoteFolders.forEach(f => {
+    items.push(`<div class="folder-item ${currentFolder === f.id ? 'active' : ''}">
+      <button class="folder-name" data-folder="${f.id}">📁 ${escapeHtml(f.name)}</button>
+      <span class="folder-ops">
+        <button data-folder-rename="${f.id}" title="重命名">✏️</button>
+        <button data-folder-del="${f.id}" title="删除">🗑️</button>
+      </span>
+    </div>`);
+  });
+  $('#folderList').innerHTML = items.join('');
+}
+
+function renderQuoteList() {
+  const q = $('#quoteSearch').value.trim().toLowerCase();
+  let list = quotes;
+  if (currentFolder === 'none') list = list.filter(x => !x.folder_id);
+  else if (currentFolder !== 'all') list = list.filter(x => x.folder_id === currentFolder);
+  if (q) {
+    list = list.filter(x => (x.item_no + ' ' + x.product_name + ' ' + x.supplier_cn + ' ' + x.product_spec).toLowerCase().includes(q));
+  }
+  $('#quoteList').innerHTML = list.length
+    ? `<div class="quote-grid">${list.map(quoteCardHtml).join('')}</div>`
+    : `<div class="empty">暂无报价，点右上角「+ 新增报价」开始</div>`;
+}
+
+function quoteCardHtml(q) {
+  const first = (q.images && q.images[0]) ? q.images[0] : '';
+  const thumb = first ? `<img src="${first}">` : `<div class="no-img">无图</div>`;
+  const count = (q.images && q.images.length) ? `<span class="img-count">${q.images.length}张</span>` : '';
+  const folderName = q.folder_id ? ((quoteFolders.find(f => f.id === q.folder_id) || {}).name || '') : '';
+  return `
+    <div class="quote-card">
+      <div class="quote-thumb">${thumb}${count}</div>
+      <div class="quote-body">
+        <div class="quote-no">${escapeHtml(q.item_no || '未填货号')}</div>
+        <div class="quote-name">${escapeHtml(q.product_name || '')}</div>
+        <div class="quote-supplier">${escapeHtml(q.supplier_cn || '')}</div>
+        <div class="quote-prices">
+          <span>¥${escapeHtml(q.purchase_price || '—')}</span>
+          <span>$ ${escapeHtml(q.export_price || '—')}</span>
+        </div>
+        <div class="quote-meta">CBM ${escapeHtml(q.cbm || '—')}${q.moq ? ' · MOQ ' + escapeHtml(q.moq) : ''}${folderName ? ' · ' + escapeHtml(folderName) : ''}</div>
+      </div>
+      <div class="quote-actions">
+        <button class="btn-mini" data-quote-edit="${q.id}">编辑</button>
+        <button class="btn-mini" data-quote-move="${q.id}">移动</button>
+        <button class="btn-mini danger" data-quote-del="${q.id}">删除</button>
+      </div>
+    </div>`;
+}
+
+function quoteFieldsHtml(q = {}) {
+  return QUOTE_FIELDS.map(f => {
+    const val = q[f.key] == null ? '' : q[f.key];
+    const cls = f.span ? ` item-field span${f.span}` : ' item-field';
+    const control = `<input type="text" ${f.num ? 'inputmode="decimal"' : ''} ${f.readonly ? 'readonly' : ''} data-qfield="${f.key}" value="${escapeHtml(val)}">`;
+    return `<label class="${cls}">${f.label}${control}</label>`;
+  }).join('');
+}
+
+function populateQuoteFolderSelect(selectedId) {
+  $('#q_folder_id').innerHTML = `<option value="">未分类</option>` +
+    quoteFolders.map(f => `<option value="${f.id}" ${f.id === selectedId ? 'selected' : ''}>${escapeHtml(f.name)}</option>`).join('');
+}
+
+function renderImagePreviews() {
+  const box = $('#quoteImagePreviews');
+  if (!editingImages.length) { box.innerHTML = '<div class="img-empty">暂无图片</div>'; return; }
+  box.innerHTML = editingImages.map((im, i) => `
+    <div class="img-item">
+      <img src="${im.dataUrl}" data-zoom>
+      <button type="button" class="img-del" data-img-del="${i}">×</button>
+    </div>`).join('');
+}
+
+function computeQuoteCbm() {
+  const get = k => {
+    const el = $('#quoteFields').querySelector(`[data-qfield="${k}"]`);
+    return parseFloat(el && el.value) || 0;
+  };
+  const cbm = get('ctn_l') * get('ctn_w') * get('ctn_h') / 1000000;
+  const el = $('#quoteFields').querySelector('[data-qfield="cbm"]');
+  if (el) el.value = cbm ? String(Math.round(cbm * 10000) / 10000) : '';
+}
+
+function openQuoteAdd() {
+  editingQuoteId = null;
+  editingImages = [];
+  $('#quoteModalTitle').textContent = '新增报价';
+  $('#quoteForm').reset();
+  populateQuoteFolderSelect('');
+  $('#quoteFields').innerHTML = quoteFieldsHtml({});
+  renderImagePreviews();
+  computeQuoteCbm();
+  $('#quoteModalMask').hidden = false;
+}
+
+function openQuoteEdit(id) {
+  const q = quotes.find(x => x.id === id);
+  if (!q) return;
+  editingQuoteId = id;
+  editingImages = (q.images || []).map(d => ({ dataUrl: d }));
+  $('#quoteModalTitle').textContent = '查看 / 编辑报价';
+  $('#quoteFields').innerHTML = quoteFieldsHtml(q);
+  populateQuoteFolderSelect(q.folder_id);
+  renderImagePreviews();
+  computeQuoteCbm();
+  $('#quoteModalMask').hidden = false;
+}
+
+function closeQuoteModal() {
+  $('#quoteModalMask').hidden = true;
+  editingQuoteId = null;
+  editingImages = [];
+}
+
+async function saveQuote(e) {
+  e.preventDefault();
+  const data = { images: editingImages.map(i => i.dataUrl), folder_id: $('#q_folder_id').value || null };
+  QUOTE_FIELDS.forEach(f => {
+    const el = $('#quoteFields').querySelector(`[data-qfield="${f.key}"]`);
+    data[f.key] = el ? el.value.trim() : '';
+  });
+  if (!data.item_no && !data.product_name && !data.supplier_cn && !data.images.length) {
+    toast('请至少填写一项内容', true);
+    return;
+  }
+  try {
+    if (editingQuoteId) {
+      data.updated_at = nowISO();
+      await Storage.update('quotes', editingQuoteId, data);
+      toast('已保存');
+    } else {
+      data.id = genId();
+      data.created_at = nowISO();
+      data.updated_at = nowISO();
+      await Storage.add('quotes', data);
+      toast('已新增');
+    }
+    closeQuoteModal();
+    await refreshQuotes();
+  } catch (err) {
+    console.error(err);
+    toast('保存失败：' + err.message, true);
+  }
+}
+
+async function removeQuote(id) {
+  const q = quotes.find(x => x.id === id);
+  const name = q ? (q.item_no || q.product_name || '未命名') : '';
+  if (!confirm(`确定删除报价「${name}」吗？删除后不可恢复。`)) return;
+  try {
+    await Storage.remove('quotes', id);
+    await refreshQuotes();
+    toast('已删除');
+  } catch (err) {
+    toast('删除失败：' + err.message, true);
+  }
+}
+
+function openMoveQuote(id) {
+  moveQuoteId = id;
+  const q = quotes.find(x => x.id === id);
+  $('#moveFolderId').innerHTML = `<option value="">未分类</option>` +
+    quoteFolders.map(f => `<option value="${f.id}">${escapeHtml(f.name)}</option>`).join('');
+  $('#moveFolderId').value = (q && q.folder_id) ? q.folder_id : '';
+  $('#moveModalMask').hidden = false;
+}
+
+async function doMoveQuote(e) {
+  e.preventDefault();
+  const folderId = $('#moveFolderId').value || null;
+  try {
+    await Storage.update('quotes', moveQuoteId, { folder_id: folderId, updated_at: nowISO() });
+    $('#moveModalMask').hidden = true;
+    await refreshQuotes();
+    toast('已移动');
+  } catch (err) {
+    toast('移动失败：' + err.message, true);
+  }
+}
+
+async function addFolder() {
+  const name = prompt('请输入文件夹名称：');
+  if (!name || !name.trim()) return;
+  try {
+    await Storage.add('quote_folders', { id: genId(), name: name.trim(), created_at: nowISO() });
+    await refreshQuotes();
+    toast('已新建文件夹');
+  } catch (err) {
+    toast('新建失败：' + err.message, true);
+  }
+}
+
+async function renameFolder(id) {
+  const f = quoteFolders.find(x => x.id === id);
+  if (!f) return;
+  const name = prompt('重命名文件夹：', f.name);
+  if (!name || !name.trim()) return;
+  try {
+    await Storage.update('quote_folders', id, { name: name.trim() });
+    await refreshQuotes();
+    toast('已重命名');
+  } catch (err) {
+    toast('重命名失败：' + err.message, true);
+  }
+}
+
+async function removeFolder(id) {
+  const f = quoteFolders.find(x => x.id === id);
+  if (!f) return;
+  if (!confirm(`删除文件夹「${f.name}」？里面的报价会移到「未分类」。`)) return;
+  try {
+    const affected = quotes.filter(q => q.folder_id === id);
+    for (const q of affected) {
+      await Storage.update('quotes', q.id, { folder_id: null, updated_at: nowISO() });
+    }
+    await Storage.remove('quote_folders', id);
+    if (currentFolder === id) currentFolder = 'all';
+    await refreshQuotes();
+    toast('已删除文件夹');
+  } catch (err) {
+    toast('删除失败：' + err.message, true);
+  }
+}
+
+/* 图片处理 */
+function readFileAsDataURL(file) {
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(r.result);
+    r.onerror = rej;
+    r.readAsDataURL(file);
+  });
+}
+function loadImage(src) {
+  return new Promise((res, rej) => {
+    const img = new Image();
+    img.onload = () => res(img);
+    img.onerror = rej;
+    img.src = src;
+  });
+}
+async function compressImage(file, maxDim = 1280, quality = 0.82) {
+  const dataUrl = await readFileAsDataURL(file);
+  const img = await loadImage(dataUrl);
+  const scale = Math.min(1, maxDim / Math.max(img.naturalWidth, img.naturalHeight));
+  const w = Math.max(1, Math.round(img.naturalWidth * scale));
+  const h = Math.max(1, Math.round(img.naturalHeight * scale));
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+  return canvas.toDataURL('image/jpeg', quality);
+}
+async function handleQuoteImages(files) {
+  for (const file of Array.from(files)) {
+    try {
+      const dataUrl = await compressImage(file);
+      editingImages.push({ dataUrl });
+    } catch (e) {
+      console.error(e);
+      toast('图片处理失败：' + (e && e.message || ''), true);
+    }
+  }
+  renderImagePreviews();
+}
+
+function openLightbox(src) {
+  $('#lightboxImg').src = src;
+  $('#lightbox').hidden = false;
+}
+
 /* ---------- 模块切换 ---------- */
 function setModule(m) {
   currentModule = m;
@@ -528,6 +847,8 @@ function setModule(m) {
   $('#module-contracts').hidden = m !== 'contracts';
   $('#module-tracking').hidden = m !== 'tracking';
   $('#module-freight').hidden = m !== 'freight';
+  $('#module-quotes').hidden = m !== 'quotes';
+  $('#module-admin').hidden = m !== 'admin';
 }
 
 /* ---------- 提示浮层 ---------- */
@@ -587,6 +908,65 @@ function bindEvents() {
     const f = e.target.dataset && e.target.dataset.itemField;
     if (f === 'pack_size' || f === 'boxes' || f === 'unit_price') recompute(e.target.closest('.item-card'));
   });
+
+  // 已有报价
+  document.addEventListener('click', e => {
+    const folder = e.target.closest('[data-folder]');
+    if (folder) { currentFolder = folder.dataset.folder; renderQuoteFolders(); renderQuoteList(); return; }
+    const fr = e.target.closest('[data-folder-rename]');
+    if (fr) { renameFolder(fr.dataset.folderRename); return; }
+    const fd = e.target.closest('[data-folder-del]');
+    if (fd) { removeFolder(fd.dataset.folderDel); return; }
+    const qe = e.target.closest('[data-quote-edit]');
+    if (qe) { openQuoteEdit(qe.dataset.quoteEdit); return; }
+    const qm = e.target.closest('[data-quote-move]');
+    if (qm) { openMoveQuote(qm.dataset.quoteMove); return; }
+    const qd = e.target.closest('[data-quote-del]');
+    if (qd) { removeQuote(qd.dataset.quoteDel); return; }
+    const imd = e.target.closest('[data-img-del]');
+    if (imd) { editingImages.splice(Number(imd.dataset.imgDel), 1); renderImagePreviews(); return; }
+    const zoom = e.target.closest('[data-zoom]');
+    if (zoom) { openLightbox(zoom.src); return; }
+  });
+
+  $('#btnQuoteAdd').addEventListener('click', openQuoteAdd);
+  $('#btnFolderAdd').addEventListener('click', addFolder);
+  $('#quoteModalClose').addEventListener('click', closeQuoteModal);
+  $('#quoteModalCancel').addEventListener('click', closeQuoteModal);
+  $('#quoteModalMask').addEventListener('click', e => { if (e.target === $('#quoteModalMask')) closeQuoteModal(); });
+  $('#quoteForm').addEventListener('submit', saveQuote);
+  $('#quoteSearch').addEventListener('input', renderQuoteList);
+  $('#btnQuoteImg').addEventListener('click', () => $('#quoteImgInput').click());
+  $('#quoteImgInput').addEventListener('change', e => {
+    const files = Array.from(e.target.files || []);
+    e.target.value = '';
+    handleQuoteImages(files);
+  });
+  $('#quoteFields').addEventListener('input', e => {
+    const k = e.target.dataset && e.target.dataset.qfield;
+    if (k === 'ctn_l' || k === 'ctn_w' || k === 'ctn_h') computeQuoteCbm();
+  });
+  $('#moveModalClose').addEventListener('click', () => { $('#moveModalMask').hidden = true; });
+  $('#moveModalCancel').addEventListener('click', () => { $('#moveModalMask').hidden = true; });
+  $('#moveModalMask').addEventListener('click', e => { if (e.target === $('#moveModalMask')) $('#moveModalMask').hidden = true; });
+  $('#moveForm').addEventListener('submit', doMoveQuote);
+  $('#lightbox').addEventListener('click', () => { $('#lightbox').hidden = true; });
+
+  // 账号系统
+  $('#authForm').addEventListener('submit', handleAuthSubmit);
+  $('#authTabLogin').addEventListener('click', () => setAuthMode('login'));
+  $('#authTabRegister').addEventListener('click', () => setAuthMode('register'));
+  $('#btnLogout').addEventListener('click', doLogout);
+  $('#btnAdminAddUser').addEventListener('click', adminAddUser);
+
+  document.addEventListener('click', e => {
+    const reset = e.target.closest('[data-admin-reset]');
+    if (reset) { adminResetPassword(reset.dataset.adminReset); return; }
+    const toggle = e.target.closest('[data-admin-toggle]');
+    if (toggle) { adminToggleRole(toggle.dataset.adminToggle); return; }
+    const del = e.target.closest('[data-admin-del]');
+    if (del) { adminDeleteUser(del.dataset.adminDel); return; }
+  });
 }
 
 function populateFilters() {
@@ -596,14 +976,173 @@ function populateFilters() {
   $('#trackTypeFilter').innerHTML = opts;
 }
 
+/* ---------- 账号系统 / 管理员 ---------- */
+let authMode = 'login';
+let adminUsers = [];
+
+function updateAuthUI() {
+  const u = Auth.currentUser();
+  $('#userName').textContent = u || '未登录';
+  const isAdmin = Auth.isAdmin();
+  $('#navAdmin').hidden = !isAdmin;
+  $('#btnLogout').hidden = !Auth.loggedIn();
+  if (!isAdmin && currentModule === 'admin') setModule('contracts');
+}
+
+async function afterLogin() {
+  await Auth.refresh();
+  if (!Auth.loggedIn()) {
+    $('#authOverlay').hidden = false;
+    updateAuthUI();
+    return;
+  }
+  $('#authOverlay').hidden = true;
+  updateAuthUI();
+  setModule('contracts');
+  initFreight();
+  populateFilters();
+  await refresh();
+  await refreshQuotes();
+  if (Auth.isAdmin()) await refreshAdmin();
+}
+
+function setAuthMode(m) {
+  authMode = m;
+  $('#authTabLogin').classList.toggle('active', m === 'login');
+  $('#authTabRegister').classList.toggle('active', m === 'register');
+  $('#authSubmit').textContent = m === 'login' ? '登 录' : '注 册';
+  $('#authMsg').textContent = '';
+}
+
+async function handleAuthSubmit(e) {
+  e.preventDefault();
+  const username = $('#authUsername').value;
+  const password = $('#authPassword').value;
+  const msg = $('#authMsg');
+  msg.textContent = '';
+  try {
+    if (authMode === 'login') await Auth.login(username, password);
+    else await Auth.register(username, password);
+    $('#authUsername').value = '';
+    $('#authPassword').value = '';
+    await afterLogin();
+  } catch (err) {
+    msg.textContent = err.message || '操作失败';
+  }
+}
+
+function doLogout() {
+  Auth.logout();
+  $('#authOverlay').hidden = false;
+  $('#authUsername').value = '';
+  $('#authPassword').value = '';
+  setAuthMode('login');
+  setModule('contracts');
+  updateAuthUI();
+  $('#contractList').innerHTML = '';
+  $('#trackList').innerHTML = '';
+  $('#quoteList').innerHTML = '';
+  $('#folderList').innerHTML = '';
+  $('#adminUserList').innerHTML = '';
+}
+
+/* ---- 管理员面板 ---- */
+async function refreshAdmin() {
+  adminUsers = await Auth.listUsers();
+  renderAdminUsers();
+}
+
+function renderAdminUsers() {
+  const box = $('#adminUserList');
+  if (!adminUsers.length) { box.innerHTML = '<div class="empty">暂无账号</div>'; return; }
+  box.innerHTML = `
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead><tr><th>账号</th><th>角色</th><th>创建时间</th><th>操作</th></tr></thead>
+        <tbody>${adminUsers.map(u => `
+          <tr>
+            <td class="strong">${escapeHtml(u.username)}</td>
+            <td>${u.is_admin ? '<span class="role-badge admin">管理员</span>' : '<span class="role-badge">普通用户</span>'}</td>
+            <td>${fmtDate(u.created_at)}</td>
+            <td class="ops">
+              <button class="btn-mini" data-admin-reset="${u.id}">重置密码</button>
+              <button class="btn-mini" data-admin-toggle="${u.id}">${u.is_admin ? '取消管理员' : '设为管理员'}</button>
+              <button class="btn-mini danger" data-admin-del="${u.id}">删除</button>
+            </td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`;
+}
+
+async function adminResetPassword(id) {
+  const u = adminUsers.find(x => x.id === id);
+  if (!u) return;
+  const pwd = prompt(`为账号「${u.username}」设置新密码：`);
+  if (!pwd) return;
+  try {
+    await Auth.resetPassword(u.username, pwd);
+    toast('密码已重置');
+  } catch (err) { toast('重置失败：' + err.message, true); }
+}
+
+async function adminToggleRole(id) {
+  const u = adminUsers.find(x => x.id === id);
+  if (!u) return;
+  if (u.username === 'wlb') { toast('主管理员账号的角色不能修改', true); return; }
+  try {
+    await Storage.update('users', u.id, { is_admin: !u.is_admin });
+    await refreshAdmin();
+    toast('已更新角色');
+  } catch (err) { toast('操作失败：' + err.message, true); }
+}
+
+async function adminDeleteUser(id) {
+  const u = adminUsers.find(x => x.id === id);
+  if (!u) return;
+  if (u.username === 'wlb') { toast('不能删除主管理员账号', true); return; }
+  if (!confirm(`确定删除账号「${u.username}」？其名下所有数据也会一并删除，不可恢复。`)) return;
+  try {
+    for (const col of ['contracts', 'quotes', 'quote_folders']) {
+      const all = await Storage.getAll(col);
+      for (const r of all.filter(x => x.owner === u.username)) {
+        await Storage.remove(col, r.id);
+      }
+    }
+    await Storage.remove('users', u.id);
+    await refreshAdmin();
+    toast('已删除账号');
+  } catch (err) { toast('删除失败：' + err.message, true); }
+}
+
+async function adminAddUser() {
+  const username = (prompt('新账号用户名：') || '').trim();
+  if (!username) return;
+  if (username.length < 2) { toast('用户名至少 2 个字符', true); return; }
+  const pwd = prompt('设置密码：');
+  if (!pwd) return;
+  try {
+    const users = await Auth.listUsers();
+    if (users.some(u => u.username === username)) { toast('该账号已存在', true); return; }
+    const isAdmin = confirm('是否设为管理员？（确定=管理员，取消=普通用户）');
+    const user = { id: genId(), username, password: await Auth.hashPassword(username, pwd), is_admin: isAdmin, created_at: nowISO() };
+    await Storage.add('users', user);
+    await refreshAdmin();
+    toast('已新增账号');
+  } catch (err) { toast('新增失败：' + err.message, true); }
+}
+
 /* ---------- 启动 ---------- */
 async function init() {
   Storage.init();
   renderModeBadge();
-  populateFilters();
   bindEvents();
-  initFreight();
-  setModule('contracts');
-  await refresh();
+  Auth.loadSession();
+  updateAuthUI();
+  if (!Auth.loggedIn()) {
+    $('#authOverlay').hidden = false;
+    return;
+  }
+  await afterLogin();
 }
 document.addEventListener('DOMContentLoaded', init);

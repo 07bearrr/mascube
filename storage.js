@@ -51,12 +51,30 @@ const Storage = (() => {
     return res.json();
   }
 
+  /* 当前登录用户（普通用户只看自己的数据，管理员看全部） */
+  function ownerFor() {
+    if (typeof Auth === 'undefined' || typeof Auth.currentUser !== 'function') return null;
+    const u = Auth.currentUser();
+    if (!u || Auth.isAdmin()) return null;
+    return u;
+  }
+
   async function getAll(collection) {
-    if (useCloud) return await rest(`${tableFor(collection)}?select=*&order=created_at.desc`);
-    return localGet(collection);
+    const owner = (collection === 'users') ? null : ownerFor();
+    if (useCloud) {
+      const filter = owner ? `&owner=eq.${encodeURIComponent(owner)}` : '';
+      return await rest(`${tableFor(collection)}?select=*${filter}&order=created_at.desc`);
+    }
+    let list = localGet(collection);
+    if (owner) list = list.filter(r => r.owner === owner);
+    return list;
   }
 
   async function add(collection, record) {
+    if (collection !== 'users' && typeof Auth !== 'undefined' && typeof Auth.currentUser === 'function') {
+      const u = Auth.currentUser();
+      if (u) record = { ...record, owner: u };
+    }
     if (useCloud) {
       const rows = await rest(tableFor(collection), {
         method: 'POST',
@@ -72,8 +90,10 @@ const Storage = (() => {
   }
 
   async function update(collection, id, changes) {
+    const owner = (collection === 'users') ? null : ownerFor();
     if (useCloud) {
-      const rows = await rest(`${tableFor(collection)}?id=eq.${encodeURIComponent(id)}`, {
+      const filter = owner ? `&owner=eq.${encodeURIComponent(owner)}` : '';
+      const rows = await rest(`${tableFor(collection)}?id=eq.${encodeURIComponent(id)}${filter}`, {
         method: 'PATCH',
         body: JSON.stringify(changes),
         headers: { Prefer: 'return=representation' },
@@ -81,7 +101,7 @@ const Storage = (() => {
       return rows && rows[0];
     }
     const list = localGet(collection);
-    const i = list.findIndex(r => r.id === id);
+    const i = list.findIndex(r => r.id === id && (!owner || r.owner === owner));
     if (i >= 0) {
       list[i] = { ...list[i], ...changes, updated_at: new Date().toISOString() };
       localSet(collection, list);
@@ -91,11 +111,13 @@ const Storage = (() => {
   }
 
   async function remove(collection, id) {
+    const owner = (collection === 'users') ? null : ownerFor();
     if (useCloud) {
-      await rest(`${tableFor(collection)}?id=eq.${encodeURIComponent(id)}`, { method: 'DELETE' });
+      const filter = owner ? `&owner=eq.${encodeURIComponent(owner)}` : '';
+      await rest(`${tableFor(collection)}?id=eq.${encodeURIComponent(id)}${filter}`, { method: 'DELETE' });
       return;
     }
-    localSet(collection, localGet(collection).filter(r => r.id !== id));
+    localSet(collection, localGet(collection).filter(r => !(r.id === id && (!owner || r.owner === owner))));
   }
 
   return { init, isCloud, getAll, add, update, remove };

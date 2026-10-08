@@ -18,9 +18,15 @@
         <button class="side-nav-item active" data-module="contracts">📦 合同管理</button>
         <button class="side-nav-item" data-module="tracking">📈 进度追踪</button>
         <button class="side-nav-item" data-module="freight">🚚 运费计算</button>
+        <button class="side-nav-item" data-module="quotes">💰 已有报价</button>
+        <button class="side-nav-item" data-module="admin" id="navAdmin" hidden>👤 账号管理</button>
       </nav>
       <div class="sidebar-foot">
         <span id="modeBadge" class="badge mode"></span>
+        <div class="user-chip">
+          <span id="userName">未登录</span>
+          <button id="btnLogout" class="btn-mini" type="button" hidden>退出</button>
+        </div>
       </div>
     </aside>
 
@@ -97,6 +103,38 @@
           </div>
         </div>
       </section>
+
+      <!-- 模块四：已有报价 -->
+      <section id="module-quotes" class="module-panel" hidden>
+        <header class="page-head">
+          <h2>已有报价</h2>
+          <button class="btn btn-primary" id="btnQuoteAdd">+ 新增报价</button>
+        </header>
+        <div class="quotes-layout">
+          <aside class="folder-panel">
+            <div class="folder-head">
+              <strong>大类 / 文件夹</strong>
+              <button class="btn-mini" id="btnFolderAdd" type="button">+ 新建</button>
+            </div>
+            <div class="folder-list" id="folderList"></div>
+          </aside>
+          <div class="quotes-main">
+            <section class="toolbar">
+              <input type="search" id="quoteSearch" class="search" placeholder="搜索货号 / 产品名称 / 供应商">
+            </section>
+            <section id="quoteList"></section>
+          </div>
+        </div>
+      </section>
+
+      <!-- 模块五：账号管理（仅管理员） -->
+      <section id="module-admin" class="module-panel" hidden>
+        <header class="page-head">
+          <h2>账号管理</h2>
+          <button class="btn btn-primary" id="btnAdminAddUser">+ 新增账号</button>
+        </header>
+        <section id="adminUserList"></section>
+      </section>
     </main>
   </div>
 
@@ -154,11 +192,85 @@
     </div>
   </div>
 
+  <!-- 报价表单弹窗 -->
+  <div class="modal-mask" id="quoteModalMask" hidden>
+    <div class="modal contract-modal">
+      <div class="modal-head">
+        <h2 id="quoteModalTitle">新增报价</h2>
+        <button class="close" id="quoteModalClose" type="button">×</button>
+      </div>
+      <form id="quoteForm" class="form-grid">
+        <label>所属大类
+          <select id="q_folder_id"></select>
+        </label>
+        <div class="span2">
+          <div class="item-grid" id="quoteFields"></div>
+        </div>
+        <div class="span2 image-section">
+          <div class="items-head">
+            <strong>图片（可上传多张）</strong>
+            <button class="btn-mini" id="btnQuoteImg" type="button">+ 添加图片</button>
+          </div>
+          <input type="file" id="quoteImgInput" accept="image/*" multiple hidden>
+          <div class="image-previews" id="quoteImagePreviews"></div>
+        </div>
+        <div class="form-actions span2">
+          <button type="button" class="btn" id="quoteModalCancel">取消</button>
+          <button type="submit" class="btn btn-primary">保存</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 移动报价弹窗 -->
+  <div class="modal-mask" id="moveModalMask" hidden>
+    <div class="modal">
+      <div class="modal-head">
+        <h2>移动到大类</h2>
+        <button class="close" id="moveModalClose" type="button">×</button>
+      </div>
+      <form id="moveForm" class="form-grid">
+        <label>目标大类
+          <select id="moveFolderId"></select>
+        </label>
+        <div class="form-actions span2">
+          <button type="button" class="btn" id="moveModalCancel">取消</button>
+          <button type="submit" class="btn btn-primary">确定移动</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 灯箱（看大图） -->
+  <div class="lightbox" id="lightbox" hidden><img id="lightboxImg" alt=""></div>
+
+  <!-- 登录 / 注册 -->
+  <div class="auth-overlay" id="authOverlay">
+    <div class="auth-card">
+      <div class="auth-brand">📋 业务员辅助系统</div>
+      <div class="auth-tabs">
+        <button class="auth-tab active" id="authTabLogin" type="button">登录</button>
+        <button class="auth-tab" id="authTabRegister" type="button">注册</button>
+      </div>
+      <form id="authForm" autocomplete="off">
+        <label>账号
+          <input id="authUsername" type="text" placeholder="输入账号">
+        </label>
+        <label>密码
+          <input id="authPassword" type="password" placeholder="输入密码">
+        </label>
+        <button type="submit" class="btn btn-primary btn-block" id="authSubmit">登 录</button>
+      </form>
+      <div class="auth-msg" id="authMsg"></div>
+    </div>
+  </div>
+
   <!-- 提示浮层 -->
   <div id="toast" class="toast" hidden></div>
 
   <script src="config.js"></script>
   <script src="storage.js"></script>
+  <script src="auth.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

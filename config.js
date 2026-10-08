@@ -13,6 +13,8 @@ window.APP_CONFIG = {
   supabaseUrl: 'https://ceetjsgndiaffferjxst.supabase.co',
   supabaseAnonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNlZXRqc2duZGlhZmZmZXJqeHN0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk4MjY2MTUsImV4cCI6MjEwNTQwMjYxNX0.ngXH4-5u8KP1vX3VQma5ZO_Xg4H4mnNivlCv0fMyfPc',
   tables: {
-    contracts: 'contracts',  // 合同追踪模块
+    contracts: 'contracts',  // 合同管理模块
+    quotes: 'quotes',        // 已有报价模块
+    quote_folders: 'quote_folders',  // 报价大类/文件夹
   },
 };

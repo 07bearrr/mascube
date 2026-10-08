@@ -1,6 +1,6 @@
 # 业务员辅助系统
 
-一个面向外贸业务员的辅助系统，目前包含三个模块：「合同管理」「进度追踪」「运费计算」。
+一个面向外贸业务员的辅助系统，包含「合同管理」「进度追踪」「运费计算」「已有报价」四个业务模块，带登录注册和账号权限（普通用户只看自己的数据，管理员看全部）。
 
 ---
 
@@ -11,6 +11,8 @@
 - ✅ **自动计算**：总数 = 装量 × 箱数；金额 = 总数 × 单价
 - ✅ **进度追踪**：独立模块，关联到对应合同，按 14 步流程更新每个货号的进度
 - ✅ **运费计算**：输入总体积，自动算陆运费 / 海运费；柜子价格和汇率可修改、自动记住
+- ✅ **已有报价**：独立产品报价库，每货号一条报价，可传多张图片、分大类（文件夹）管理
+- ✅ **账号权限**：登录后才能用；普通用户只看自己的数据，管理员看全部并管理账号
 - ✅ **搜索筛选**：合同管理 / 进度追踪都支持按销售单号 / 货号搜索、按订单类型筛选
 - ✅ **多端同步**：配置云端后，任何设备打开同一网址看到同一份数据
 
@@ -20,11 +22,12 @@
 
 | 文件 | 作用 |
 |---|---|
-| `index.html` | 页面结构（左侧导航 + 合同管理 + 进度追踪） |
+| `index.html` | 页面结构（左侧导航 + 各模块 + 登录注册） |
 | `style.css` | 样式 |
 | `config.js` | 云端配置（填这里实现多端同步） |
-| `storage.js` | 数据层（本地 / 云端自动切换） |
-| `app.js` | 三个模块的逻辑（合同管理 / 进度追踪 / 运费计算） |
+| `storage.js` | 数据层（本地 / 云端自动切换，按账号过滤） |
+| `auth.js` | 账号系统（注册 / 登录 / 密码加密 / 权限） |
+| `app.js` | 各模块逻辑（合同 / 进度 / 运费 / 报价 / 账号管理） |
 
 ---
 
@@ -91,6 +94,25 @@
 
 > 运费参数存在当前浏览器里（本地），换一台设备需重新设置一次。
 
+### 已有报价
+
+独立维护的产品报价库，每个货号一条报价，可上传多张图片、分大类管理。
+
+- 字段：货号、产品名称、图片（多张）、产品规格、产品包装、采购单价(¥)、外销单价($)、最小起订量、单位、内盒、出口箱尺寸（每箱数量/长/宽/高）、立方米 CBM（按长宽高自动算）、净重、毛重、供应商中文
+- 大类（文件夹）：可视化新建、重命名、删除文件夹；报价可移入/移出文件夹
+- 图片会压缩后随数据保存；本地模式受浏览器 5MB 上限影响，建议用云端模式存图片
+
+> 云端使用本模块前，需在 Supabase 里再建 `quotes` 和 `quote_folders` 两张表（SQL 见第 2.3 步）。
+
+### 账号系统（登录 / 权限）
+
+- 打开系统先登录，没登录看不到任何数据；首次使用可在登录框点「注册」自建账号
+- 普通用户只能看到并修改**自己的**合同、报价、文件夹
+- 管理员账号：**wlb / 20040507**，能看所有数据，并在「👤 账号管理」里管理账号（新增 / 重置密码 / 设为管理员 / 删除）
+- 密码用 SHA-256 加盐加密存储，不存明文；管理员也看不到原密码，只能帮人重置
+
+> 云端使用账号系统前，需在 Supabase 里建 `users` 表、给数据表加 `owner` 字段（SQL 见第 2.3 步）。
+
 ---
 
 # 第一阶段：本地试用（现在就能做，不需要任何账号）
@@ -148,9 +170,7 @@
 3. 把下面这段**全部复制**粘贴进去：
 
 ```sql
-drop table if exists contracts;
-
-create table contracts (
+create table if not exists contracts (
   id text primary key,
   sales_order_no text,
   supplier text,
@@ -161,7 +181,69 @@ create table contracts (
 );
 
 alter table contracts enable row level security;
+drop policy if exists "public_all" on contracts;
 create policy "public_all" on contracts for all using (true) with check (true);
+
+create table if not exists quotes (
+  id text primary key,
+  folder_id text,
+  item_no text,
+  product_name text,
+  supplier_cn text,
+  product_spec text,
+  product_packing text,
+  purchase_price text,
+  export_price text,
+  moq text,
+  unit text,
+  inner_box text,
+  ctn_qty text,
+  ctn_l text,
+  ctn_w text,
+  ctn_h text,
+  cbm text,
+  nw text,
+  gw text,
+  images jsonb,
+  created_at text,
+  updated_at text
+);
+alter table quotes enable row level security;
+drop policy if exists "public_all" on quotes;
+create policy "public_all" on quotes for all using (true) with check (true);
+
+create table if not exists quote_folders (
+  id text primary key,
+  name text,
+  created_at text
+);
+alter table quote_folders enable row level security;
+drop policy if exists "public_all" on quote_folders;
+create policy "public_all" on quote_folders for all using (true) with check (true);
+
+-- 账号系统
+create table if not exists users (
+  id text primary key,
+  username text unique not null,
+  password text not null,
+  is_admin boolean default false,
+  created_at text
+);
+alter table users enable row level security;
+drop policy if exists "public_all" on users;
+create policy "public_all" on users for all using (true) with check (true);
+
+alter table contracts add column if not exists owner text;
+alter table quotes add column if not exists owner text;
+alter table quote_folders add column if not exists owner text;
+
+update contracts set owner = 'wlb' where owner is null;
+update quotes set owner = 'wlb' where owner is null;
+update quote_folders set owner = 'wlb' where owner is null;
+
+insert into users (id, username, password, is_admin, created_at)
+values ('admin', 'wlb', '66376bf896cd3fd0c2e8388050e5c34e5d9c4db69016301a089be2920a78f682', true, now()::text)
+on conflict (username) do nothing;
 ```
 
 4. 点右下角 **Run**（运行），看到绿色 **Success** 就是成功了
@@ -212,11 +294,12 @@ window.APP_CONFIG = {
 ### 4.2 上传文件
 
 1. 在新仓库页面，点 **Add file** → **Upload files**
-2. 把下面这 5 个文件**全部拖进去**：
+2. 把下面这 6 个文件**全部拖进去**：
    - `index.html`
    - `style.css`
    - `config.js`
    - `storage.js`
+   - `auth.js`
    - `app.js`
 3. 点 **Commit changes**（提交）
 
