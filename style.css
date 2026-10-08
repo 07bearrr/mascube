@@ -188,6 +188,10 @@ td.ops { white-space: nowrap; }
 }
 .item-grid input:focus, .item-grid select:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.12); }
 .item-grid input[readonly] { background: #f1f5f9; color: var(--muted); }
+.item-grid .item-field.span4 { grid-column: span 4; }
+.field-group { margin-bottom: 14px; }
+.field-group:last-child { margin-bottom: 0; }
+.field-group-title { font-size: 12px; font-weight: 700; color: var(--text); margin-bottom: 8px; padding-bottom: 4px; border-bottom: 1px solid var(--border); }
 
 /* ===== 订单进度 ===== */
 .item-progress { margin-top: 14px; border-top: 1px dashed var(--border); padding-top: 12px; }
@@ -226,7 +230,7 @@ td.ops { white-space: nowrap; }
   .form-grid { grid-template-columns: 1fr; }
   .span2 { grid-column: span 1; }
   .item-grid { grid-template-columns: 1fr; }
-  .item-grid .item-field.span2, .item-grid .item-field.span3 { grid-column: span 1; }
+  .item-grid .item-field.span2, .item-grid .item-field.span3, .item-grid .item-field.span4 { grid-column: span 1; }
   .contract-modal { max-width: 100%; }
 }
 

@@ -36,22 +36,26 @@ const PACKAGING_STAGES = ['沿用老设计', '等客户做设计', '我们设计
 const TOTAL_STEPS = CHECK_STEPS.length + 1 + SELECT_STEPS.length;
 
 const ITEM_FIELDS = [
-  { key: 'item_no', label: '货号' },
-  { key: 'description', label: '产品描述', span: 2 },
-  { key: 'unit', label: '计量单位' },
-  { key: 'pack_size', label: '装量', num: true },
-  { key: 'boxes', label: '箱数', num: true },
-  { key: 'total_qty', label: '总数(装量×箱数)', readonly: true },
-  { key: 'unit_price', label: '单价(含税)', num: true },
-  { key: 'amount', label: '金额(总数×单价)', readonly: true },
-  { key: 'delivery_date', label: '交货日期', type: 'date' },
-  { key: 'ship_date', label: '船期', type: 'date' },
-  { key: 'ean_each', label: 'EAN/EACH条码' },
-  { key: 'mid_box_barcode', label: '中盒条码' },
-  { key: 'outer_itf14', label: '外箱ITF-14条码' },
-  { key: 'lot_no', label: 'LOT号' },
-  { key: 'packaging_req', label: '包装要求', span: 3 },
-  { key: 'order_type', label: '订单类型', type: 'select', options: ORDER_TYPES },
+  { key: 'item_no', label: '货号', group: '基本信息' },
+  { key: 'unit', label: '计量单位', group: '基本信息' },
+  { key: 'order_type', label: '订单类型', type: 'select', options: ORDER_TYPES, group: '基本信息' },
+  { key: 'description', label: '产品描述', span: 4, group: '基本信息' },
+
+  { key: 'pack_size', label: '装量', num: true, group: '数量与金额' },
+  { key: 'boxes', label: '箱数', num: true, group: '数量与金额' },
+  { key: 'total_qty', label: '总数(装量×箱数)', readonly: true, group: '数量与金额' },
+  { key: 'unit_price', label: '单价(含税)', num: true, group: '数量与金额' },
+  { key: 'amount', label: '金额(总数×单价)', readonly: true, group: '数量与金额' },
+
+  { key: 'delivery_date', label: '交货日期', type: 'date', group: '日期' },
+  { key: 'ship_date', label: '船期', type: 'date', group: '日期' },
+
+  { key: 'ean_each', label: 'EAN/EACH条码', group: '条码信息' },
+  { key: 'mid_box_barcode', label: '中盒条码', group: '条码信息' },
+  { key: 'outer_itf14', label: '外箱ITF-14条码', group: '条码信息' },
+  { key: 'lot_no', label: 'LOT号', group: '条码信息' },
+
+  { key: 'packaging_req', label: '包装要求', span: 4, group: '其他' },
 ];
 
 let contracts = [];
@@ -201,19 +205,26 @@ function renderTracking() {
 
 /* ---------- 合同管理：货号明细渲染 ---------- */
 function itemCardHtml(item = {}) {
-  const fields = ITEM_FIELDS.map(f => {
+  const groups = [];
+  let cur = null;
+  ITEM_FIELDS.forEach(f => {
+    const g = f.group || '';
+    if (!cur || cur.name !== g) { cur = { name: g, fields: [] }; groups.push(cur); }
+    cur.fields.push(f);
+  });
+
+  const control = f => {
     const val = item[f.key] == null ? '' : item[f.key];
-    const cls = f.span ? ` item-field span${f.span}` : ' item-field';
-    let control;
-    if (f.type === 'date') {
-      control = `<input type="date" data-item-field="${f.key}" value="${escapeHtml(val)}">`;
-    } else if (f.type === 'select') {
-      control = `<select data-item-field="${f.key}">${f.options.map(o => `<option ${o === val ? 'selected' : ''}>${o}</option>`).join('')}</select>`;
-    } else {
-      control = `<input type="text" ${f.num ? 'inputmode="decimal"' : ''} ${f.readonly ? 'readonly' : ''} data-item-field="${f.key}" value="${escapeHtml(val)}">`;
-    }
-    return `<label class="${cls}">${f.label}${control}</label>`;
-  }).join('');
+    if (f.type === 'date') return `<input type="date" data-item-field="${f.key}" value="${escapeHtml(val)}">`;
+    if (f.type === 'select') return `<select data-item-field="${f.key}">${f.options.map(o => `<option ${o === val ? 'selected' : ''}>${o}</option>`).join('')}</select>`;
+    return `<input type="text" ${f.num ? 'inputmode="decimal"' : ''} ${f.readonly ? 'readonly' : ''} data-item-field="${f.key}" value="${escapeHtml(val)}">`;
+  };
+
+  const body = groups.map(g => `
+    <div class="field-group">
+      <div class="field-group-title">${g.name}</div>
+      <div class="item-grid">${g.fields.map(f => `<label class="item-field${f.span ? ' span' + f.span : ''}">${f.label}${control(f)}</label>`).join('')}</div>
+    </div>`).join('');
 
   return `
     <div class="item-card" data-item-id="${item.id || ''}">
@@ -221,7 +232,7 @@ function itemCardHtml(item = {}) {
         <span class="item-idx"></span>
         <button class="btn-mini danger" type="button" data-item-remove>删除此货号</button>
       </div>
-      <div class="item-grid">${fields}</div>
+      ${body}
     </div>`;
 }
 
@@ -560,23 +571,26 @@ function computeQuote() {
 }
 /* ---------- 模块四：已有报价 ---------- */
 const QUOTE_FIELDS = [
-  { key: 'item_no', label: '货号' },
-  { key: 'product_name', label: '产品名称', span: 2 },
-  { key: 'supplier_cn', label: '供应商中文' },
-  { key: 'product_spec', label: '产品规格', span: 2 },
-  { key: 'product_packing', label: '产品包装', span: 2 },
-  { key: 'purchase_price', label: '采购单价(¥)', num: true },
-  { key: 'export_price', label: '外销单价($)', num: true },
-  { key: 'moq', label: '最小起订量', num: true },
-  { key: 'unit', label: '单位' },
-  { key: 'inner_box', label: '内盒', num: true },
-  { key: 'ctn_qty', label: '每箱数量', num: true },
-  { key: 'ctn_l', label: '箱长(cm)', num: true },
-  { key: 'ctn_w', label: '箱宽(cm)', num: true },
-  { key: 'ctn_h', label: '箱高(cm)', num: true },
-  { key: 'cbm', label: '立方米 CBM', readonly: true },
-  { key: 'nw', label: '净重(kg)', num: true },
-  { key: 'gw', label: '毛重(kg)', num: true },
+  { key: 'item_no', label: '货号', group: '基本信息' },
+  { key: 'product_name', label: '产品名称', span: 2, group: '基本信息' },
+  { key: 'supplier_cn', label: '供应商中文', group: '基本信息' },
+  { key: 'product_spec', label: '产品规格', span: 2, group: '基本信息' },
+  { key: 'product_packing', label: '产品包装', span: 2, group: '基本信息' },
+
+  { key: 'purchase_price', label: '采购单价(¥)', num: true, group: '价格与起订' },
+  { key: 'export_price', label: '外销单价($)', num: true, group: '价格与起订' },
+  { key: 'moq', label: '最小起订量', num: true, group: '价格与起订' },
+  { key: 'unit', label: '单位', group: '价格与起订' },
+
+  { key: 'inner_box', label: '内盒', num: true, group: '装箱尺寸' },
+  { key: 'ctn_qty', label: '每箱数量', num: true, group: '装箱尺寸' },
+  { key: 'ctn_l', label: '箱长(cm)', num: true, group: '装箱尺寸' },
+  { key: 'ctn_w', label: '箱宽(cm)', num: true, group: '装箱尺寸' },
+  { key: 'ctn_h', label: '箱高(cm)', num: true, group: '装箱尺寸' },
+  { key: 'cbm', label: '立方米 CBM', readonly: true, group: '装箱尺寸' },
+
+  { key: 'nw', label: '净重(kg)', num: true, group: '重量' },
+  { key: 'gw', label: '毛重(kg)', num: true, group: '重量' },
 ];
 
 let quotes = [];
@@ -656,12 +670,23 @@ function quoteCardHtml(q) {
 }
 
 function quoteFieldsHtml(q = {}) {
-  return QUOTE_FIELDS.map(f => {
-    const val = q[f.key] == null ? '' : q[f.key];
-    const cls = f.span ? ` item-field span${f.span}` : ' item-field';
-    const control = `<input type="text" ${f.num ? 'inputmode="decimal"' : ''} ${f.readonly ? 'readonly' : ''} data-qfield="${f.key}" value="${escapeHtml(val)}">`;
-    return `<label class="${cls}">${f.label}${control}</label>`;
-  }).join('');
+  const groups = [];
+  let cur = null;
+  QUOTE_FIELDS.forEach(f => {
+    const g = f.group || '';
+    if (!cur || cur.name !== g) { cur = { name: g, fields: [] }; groups.push(cur); }
+    cur.fields.push(f);
+  });
+  return groups.map(g => `
+    <div class="field-group">
+      <div class="field-group-title">${g.name}</div>
+      <div class="item-grid">${g.fields.map(f => {
+        const val = q[f.key] == null ? '' : q[f.key];
+        const cls = f.span ? ` item-field span${f.span}` : ' item-field';
+        const control = `<input type="text" ${f.num ? 'inputmode="decimal"' : ''} ${f.readonly ? 'readonly' : ''} data-qfield="${f.key}" value="${escapeHtml(val)}">`;
+        return `<label class="${cls}">${f.label}${control}</label>`;
+      }).join('')}</div>
+    </div>`).join('');
 }
 
 function populateQuoteFolderSelect(selectedId) {
