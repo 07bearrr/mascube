@@ -955,12 +955,10 @@ function bindEvents() {
   $('#btnAddItem').addEventListener('click', () => addItem());
   $('#modalClose').addEventListener('click', closeModal);
   $('#modalCancel').addEventListener('click', closeModal);
-  $('#modalMask').addEventListener('click', e => { if (e.target === $('#modalMask')) closeModal(); });
   $('#contractForm').addEventListener('submit', save);
 
   $('#progressModalClose').addEventListener('click', closeProgress);
   $('#progressModalCancel').addEventListener('click', closeProgress);
-  $('#progressModalMask').addEventListener('click', e => { if (e.target === $('#progressModalMask')) closeProgress(); });
   $('#progressForm').addEventListener('submit', saveProgress);
 
   $('#searchInput').addEventListener('input', renderList);
@@ -1017,7 +1015,6 @@ function bindEvents() {
   $('#btnFolderAdd').addEventListener('click', addFolder);
   $('#quoteModalClose').addEventListener('click', closeQuoteModal);
   $('#quoteModalCancel').addEventListener('click', closeQuoteModal);
-  $('#quoteModalMask').addEventListener('click', e => { if (e.target === $('#quoteModalMask')) closeQuoteModal(); });
   $('#quoteForm').addEventListener('submit', saveQuote);
   $('#quoteSearch').addEventListener('input', renderQuoteList);
   $('#btnQuoteImg').addEventListener('click', () => $('#quoteImgInput').click());
@@ -1032,7 +1029,6 @@ function bindEvents() {
   });
   $('#moveModalClose').addEventListener('click', () => { $('#moveModalMask').hidden = true; });
   $('#moveModalCancel').addEventListener('click', () => { $('#moveModalMask').hidden = true; });
-  $('#moveModalMask').addEventListener('click', e => { if (e.target === $('#moveModalMask')) $('#moveModalMask').hidden = true; });
   $('#moveForm').addEventListener('submit', doMoveQuote);
   $('#lightbox').addEventListener('click', () => { $('#lightbox').hidden = true; });
 
