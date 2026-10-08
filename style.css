@@ -190,6 +190,8 @@ td.ops { white-space: nowrap; }
 .progress-list { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 16px; }
 .progress-step { display: flex; align-items: center; gap: 8px; font-size: 13px; }
 .progress-step input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; flex-shrink: 0; }
+.step-num { width: 20px; height: 20px; border-radius: 50%; background: #e2e8f0; color: #475569; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.progress-step input:checked + .step-num { background: var(--primary); color: #fff; }
 .progress-step.select { justify-content: space-between; }
 .progress-step.select select { padding: 5px 8px; border: 1px solid var(--border); border-radius: 6px; font-size: 12px; }
 

@@ -361,9 +361,10 @@ async function removeContract(id) {
 /* ---------- 进度追踪：进度弹窗 ---------- */
 function progressStepsHtml(progress = {}) {
   const p = progress || {};
-  const checks = CHECK_STEPS.map(s => `
+  const checks = CHECK_STEPS.map((s, i) => `
     <label class="progress-step">
       <input type="checkbox" data-progress-check="${s.key}" ${p[s.key] === true ? 'checked' : ''}>
+      <span class="step-num">${i + 1}</span>
       <span>${s.label}</span>
     </label>`).join('');
 
@@ -392,7 +393,7 @@ function progressStepsHtml(progress = {}) {
 
   return `
     <div class="progress-section">
-      <div class="progress-section-title">流程勾选（需按顺序）</div>
+      <div class="progress-section-title">流程勾选（按顺序，打勾自动勾选前面步骤）</div>
       <div class="progress-list">${checks}</div>
     </div>
     <div class="progress-section">
@@ -420,13 +421,8 @@ function setupSequentialChecks(root) {
   boxes.forEach((cb, idx) => {
     cb.addEventListener('change', () => {
       if (cb.checked) {
-        for (let i = 0; i < idx; i++) {
-          if (!boxes[i].checked) {
-            cb.checked = false;
-            toast('请按顺序勾选：先把前面步骤打勾', true);
-            return;
-          }
-        }
+        // 勾选到哪一步，前面的步骤自动打勾
+        for (let i = 0; i < idx; i++) boxes[i].checked = true;
       } else {
         for (let i = idx + 1; i < boxes.length; i++) {
           boxes[i].checked = false;
