@@ -247,6 +247,12 @@ td.ops { white-space: nowrap; }
 .freight-result .result-box .value { font-size: 22px; font-weight: 700; color: var(--primary); margin-top: 4px; }
 .freight-result .result-box.total { grid-column: span 2; }
 .freight-result .result-box.total .value { color: #16a34a; }
+
+/* 计算小工具 */
+.tools-tabs { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+.tool-tab { padding: 8px 16px; border: 1px solid var(--border); background: #f1f5f9; border-radius: 8px; cursor: pointer; font-size: 14px; color: var(--text); }
+.tool-tab.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+.tool-panel[hidden] { display: none; }
 @media (max-width: 560px) {
   .freight-grid { grid-template-columns: 1fr; }
   .freight-result { grid-template-columns: 1fr; }

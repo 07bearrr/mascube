@@ -480,7 +480,7 @@ async function saveProgress(e) {
 
 /* ---------- 模块三：运费计算 ---------- */
 const FREIGHT_KEY = 'mascube_freight_settings';
-const FREIGHT_DEFAULTS = { truck_price: '2000', sea_price: '2800', exchange_rate: '6.7' };
+const FREIGHT_DEFAULTS = { truck_price: '3000', sea_price: '2800', exchange_rate: '6.7' };
 
 function loadFreightSettings() {
   let saved = {};
@@ -846,9 +846,15 @@ function setModule(m) {
   $$('.side-nav-item').forEach(b => b.classList.toggle('active', b.dataset.module === m));
   $('#module-contracts').hidden = m !== 'contracts';
   $('#module-tracking').hidden = m !== 'tracking';
-  $('#module-freight').hidden = m !== 'freight';
+  $('#module-tools').hidden = m !== 'tools';
   $('#module-quotes').hidden = m !== 'quotes';
   $('#module-admin').hidden = m !== 'admin';
+}
+
+/* ---------- 小工具切换 ---------- */
+function setTool(t) {
+  $$('.tool-tab').forEach(b => b.classList.toggle('active', b.dataset.tool === t));
+  $$('.tool-panel').forEach(p => { p.hidden = p.id !== 'tool-' + t; });
 }
 
 /* ---------- 提示浮层 ---------- */
@@ -866,6 +872,8 @@ function bindEvents() {
   document.addEventListener('click', e => {
     const nav = e.target.closest('.side-nav-item');
     if (nav) { setModule(nav.dataset.module); return; }
+    const tool = e.target.closest('.tool-tab');
+    if (tool) { setTool(tool.dataset.tool); return; }
     const edit = e.target.closest('[data-edit]');
     if (edit) { openEdit(edit.dataset.edit); return; }
     const del = e.target.closest('[data-del]');
