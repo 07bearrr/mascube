@@ -32,6 +32,12 @@
 
     <!-- 主内容区 -->
     <main class="main">
+      <!-- 全局汇率栏 -->
+      <header class="global-bar">
+        <span class="global-bar-hint">全局汇率（改这里，所有汇率一起改）</span>
+        <input type="number" id="globalRate" step="0.01" placeholder="6.7" class="rate-input">
+      </header>
+
       <!-- 模块一：合同管理 -->
       <section id="module-contracts" class="module-panel">
         <header class="page-head">
@@ -64,6 +70,7 @@
         </header>
         <div class="tools-tabs">
           <button class="tool-tab active" data-tool="freight" type="button">🚚 运费计算</button>
+          <button class="tool-tab" data-tool="quote" type="button">💵 报价计算</button>
         </div>
         <div id="tool-freight" class="tool-panel">
           <div class="freight-wrap">
@@ -73,9 +80,6 @@
                 <div class="freight-grid">
                   <label>陆运柜子价格（默认 3000）
                     <input type="number" id="f_truck_price" step="1" placeholder="3000">
-                  </label>
-                  <label>汇率（默认 6.7）
-                    <input type="number" id="f_rate" step="0.01" placeholder="6.7">
                   </label>
                   <label>海运柜子价格（默认 2800）
                     <input type="number" id="f_sea_price" step="1" placeholder="2800">
@@ -102,6 +106,57 @@
                 <div class="result-box total">
                   <div class="label">合计</div>
                   <div class="value" id="f_total">¥0.00</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div id="tool-quote" class="tool-panel" hidden>
+          <div class="freight-wrap">
+            <div class="freight-card">
+              <div>
+                <h3 class="freight-title">填写<span class="freight-note">汇率修改后自动记住</span></h3>
+                <div class="freight-grid">
+                  <label>含税含运含包装单价（¥）
+                    <input type="number" id="q_unit_price" step="0.01" placeholder="如 12.50">
+                  </label>
+                  <label>外箱装量（个）
+                    <input type="number" id="q_carton_qty" step="1" placeholder="如 24">
+                  </label>
+                  <label>外箱长（cm）
+                    <input type="number" id="q_ctn_l" step="0.1" placeholder="如 50">
+                  </label>
+                  <label>外箱宽（cm）
+                    <input type="number" id="q_ctn_w" step="0.1" placeholder="如 40">
+                  </label>
+                  <label>外箱高（cm）
+                    <input type="number" id="q_ctn_h" step="0.1" placeholder="如 30">
+                  </label>
+                  <label>赚的点数（%，如 10 表示加 10%）
+                    <input type="number" id="q_profit" step="0.1" placeholder="如 10">
+                  </label>
+                </div>
+              </div>
+              <div class="freight-result">
+                <div class="result-box">
+                  <div class="label">外箱体积（m³）</div>
+                  <div class="value" id="q_volume">0 m³</div>
+                </div>
+                <div class="result-box">
+                  <div class="label">港杂费（¥/个）</div>
+                  <div class="value" id="q_port_fee">¥0.00</div>
+                </div>
+                <div class="result-box">
+                  <div class="label">总成本（¥/个）</div>
+                  <div class="value" id="q_total_cost">¥0.00</div>
+                </div>
+                <div class="result-box">
+                  <div class="label">人民币报价（¥/个）</div>
+                  <div class="value" id="q_rmb">¥0.00</div>
+                </div>
+                <div class="result-box total">
+                  <div class="label">美元报价（$/个）</div>
+                  <div class="value" id="q_usd">$0.00</div>
                 </div>
               </div>
             </div>

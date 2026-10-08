@@ -474,9 +474,27 @@ async function saveProgress(e) {
   }
 }
 
+/* ---------- 全局汇率 ---------- */
+const RATE_KEY = 'mascube_exchange_rate';
+const RATE_DEFAULT = '6.7';
+
+function loadRate() {
+  const v = localStorage.getItem(RATE_KEY);
+  return (v === null || v === '') ? RATE_DEFAULT : v;
+}
+function saveRate(v) {
+  localStorage.setItem(RATE_KEY, v);
+}
+function getRateNum() {
+  return parseFloat(loadRate()) || 0;
+}
+function initRate() {
+  $('#globalRate').value = loadRate();
+}
+
 /* ---------- 模块三：运费计算 ---------- */
 const FREIGHT_KEY = 'mascube_freight_settings';
-const FREIGHT_DEFAULTS = { truck_price: '3000', sea_price: '2800', exchange_rate: '6.7' };
+const FREIGHT_DEFAULTS = { truck_price: '3000', sea_price: '2800' };
 
 function loadFreightSettings() {
   let saved = {};
@@ -484,7 +502,6 @@ function loadFreightSettings() {
   const s = { ...FREIGHT_DEFAULTS, ...saved };
   if (s.truck_price === '' || s.truck_price == null) s.truck_price = FREIGHT_DEFAULTS.truck_price;
   if (s.sea_price === '' || s.sea_price == null) s.sea_price = FREIGHT_DEFAULTS.sea_price;
-  if (s.exchange_rate === '' || s.exchange_rate == null) s.exchange_rate = FREIGHT_DEFAULTS.exchange_rate;
   return s;
 }
 function saveFreightSettings(s) {
@@ -501,7 +518,7 @@ function fmtMoney(n) {
 function computeFreight() {
   const vol = parseFloat($('#f_volume').value) || 0;
   const truck = parseFloat($('#f_truck_price').value) || 0;
-  const rate = parseFloat($('#f_rate').value) || 0;
+  const rate = getRateNum();
   const land = vol / 68 * truck * rate;
   const seaPrice = parseFloat($('#f_sea_price').value) || 0;
   const sea = vol / 68 * seaPrice * rate;
@@ -513,10 +530,34 @@ function initFreight() {
   const s = loadFreightSettings();
   $('#f_truck_price').value = s.truck_price;
   $('#f_sea_price').value = s.sea_price;
-  $('#f_rate').value = s.exchange_rate;
   computeFreight();
 }
 
+/* ---------- 报价计算 ---------- */
+function fmtUsd(n) {
+  return '$' + (Math.round(n * 100) / 100).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+function computeQuote() {
+  const unit = parseFloat($('#q_unit_price').value) || 0;
+  const qty = parseFloat($('#q_carton_qty').value) || 0;
+  const L = parseFloat($('#q_ctn_l').value) || 0;
+  const W = parseFloat($('#q_ctn_w').value) || 0;
+  const H = parseFloat($('#q_ctn_h').value) || 0;
+  const rate = getRateNum();
+  const profit = parseFloat($('#q_profit').value) || 0;
+
+  const volume = L * W * H / 1000000;              // 外箱体积（m³）
+  const portFee = qty ? volume / qty * 60 : 0;     // 港杂费（¥/个）
+  const totalCost = unit + portFee;                // 总成本（¥/个）
+  const rmb = totalCost * (1 + profit / 100);      // 人民币报价（¥/个）
+  const usd = rate ? rmb / rate : 0;               // 美元报价（$/个）
+
+  $('#q_volume').textContent = volume.toFixed(4) + ' m³';
+  $('#q_port_fee').textContent = fmtMoney(portFee);
+  $('#q_total_cost').textContent = fmtMoney(totalCost);
+  $('#q_rmb').textContent = fmtMoney(rmb);
+  $('#q_usd').textContent = fmtUsd(usd);
+}
 /* ---------- 模块四：已有报价 ---------- */
 const QUOTE_FIELDS = [
   { key: 'item_no', label: '货号' },
@@ -906,7 +947,21 @@ function bindEvents() {
   $('#f_volume').addEventListener('input', computeFreight);
   $('#f_truck_price').addEventListener('input', e => { updateFreightSetting('truck_price', e.target.value); computeFreight(); });
   $('#f_sea_price').addEventListener('input', e => { updateFreightSetting('sea_price', e.target.value); computeFreight(); });
-  $('#f_rate').addEventListener('input', e => { updateFreightSetting('exchange_rate', e.target.value); computeFreight(); });
+
+  // 报价计算
+  $('#q_unit_price').addEventListener('input', computeQuote);
+  $('#q_carton_qty').addEventListener('input', computeQuote);
+  $('#q_ctn_l').addEventListener('input', computeQuote);
+  $('#q_ctn_w').addEventListener('input', computeQuote);
+  $('#q_ctn_h').addEventListener('input', computeQuote);
+  $('#q_profit').addEventListener('input', computeQuote);
+
+  // 全局汇率（改动后所有用到汇率的地方一起重算）
+  $('#globalRate').addEventListener('input', e => {
+    saveRate(e.target.value);
+    computeFreight();
+    computeQuote();
+  });
 
   $('#itemsContainer').addEventListener('input', e => {
     const f = e.target.dataset && e.target.dataset.itemField;
@@ -1004,6 +1059,7 @@ async function afterLogin() {
   updateAuthUI();
   setModule('contracts');
   initFreight();
+  initRate();
   populateFilters();
   await refresh();
   await refreshQuotes();
