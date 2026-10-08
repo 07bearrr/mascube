@@ -255,6 +255,12 @@ td.ops { white-space: nowrap; }
 .freight-result .result-box .value { font-size: 22px; font-weight: 700; color: var(--primary); margin-top: 4px; }
 .freight-result .result-box.total { grid-column: span 2; }
 .freight-result .result-box.total .value { color: #16a34a; }
+.size-group { margin-top: 14px; }
+.size-group-title { display: block; font-size: 13px; color: var(--muted); margin-bottom: 8px; }
+.size-row { display: flex; gap: 12px; }
+.size-row label { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); flex: 1; }
+.size-row input { width: 100%; border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-size: 15px; color: var(--text); font-family: inherit; }
+.size-row input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12); }
 
 /* 计算小工具 */
 .tools-tabs { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
