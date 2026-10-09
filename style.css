@@ -271,6 +271,13 @@ td.ops { white-space: nowrap; }
 .tool-tab { padding: 8px 16px; border: 1px solid var(--border); background: #f1f5f9; border-radius: 8px; cursor: pointer; font-size: 14px; color: var(--text); }
 .tool-tab.active { background: var(--primary); color: #fff; border-color: var(--primary); }
 .tool-panel[hidden] { display: none; }
+
+/* 大小写转换 */
+.case-wrap { max-width: 720px; }
+.case-wrap textarea { width: 100%; border: 1px solid var(--border); border-radius: 8px; padding: 12px; font-size: 15px; color: var(--text); font-family: inherit; line-height: 1.6; resize: vertical; box-sizing: border-box; }
+.case-wrap textarea:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12); }
+.case-wrap textarea[readonly] { background: #f8fafc; }
+.case-actions { display: flex; gap: 10px; flex-wrap: wrap; }
 @media (max-width: 560px) {
   .freight-grid { grid-template-columns: 1fr; }
   .freight-result { grid-template-columns: 1fr; }

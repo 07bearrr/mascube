@@ -569,6 +569,31 @@ function computeQuote() {
   $('#q_rmb').textContent = fmtMoney(rmb);
   $('#q_usd').textContent = fmtUsd(usd);
 }
+/* ---------- 常用小工具：大小写转换 ---------- */
+const CASE_SMALL_WORDS = new Set([
+  'a', 'an', 'the',
+  'and', 'but', 'or', 'nor', 'for', 'so', 'yet',
+  'at', 'by', 'in', 'of', 'on', 'to', 'with', 'from', 'into', 'onto', 'over', 'under',
+]);
+
+function toTitleCase(str) {
+  let first = true;
+  return str.toLowerCase().replace(/(^|[^a-z'])([a-z][a-z']*)/g, (m, sep, word) => {
+    const isFirst = first;
+    first = false;
+    if (!isFirst && CASE_SMALL_WORDS.has(word)) return sep + word;
+    return sep + word.charAt(0).toUpperCase() + word.slice(1);
+  });
+}
+
+function applyCase(type) {
+  const input = $('#caseInput').value;
+  const out = $('#caseOutput');
+  if (type === 'upper') out.value = input.toUpperCase();
+  else if (type === 'lower') out.value = input.toLowerCase();
+  else out.value = toTitleCase(input);
+}
+
 /* ---------- 模块四：已有报价 ---------- */
 const QUOTE_FIELDS = [
   { key: 'item_no', label: '货号', group: '基本信息' },
@@ -909,14 +934,16 @@ function setModule(m) {
   $('#module-contracts').hidden = m !== 'contracts';
   $('#module-tracking').hidden = m !== 'tracking';
   $('#module-tools').hidden = m !== 'tools';
+  $('#module-utils').hidden = m !== 'utils';
   $('#module-quotes').hidden = m !== 'quotes';
   $('#module-admin').hidden = m !== 'admin';
 }
 
 /* ---------- 小工具切换 ---------- */
-function setTool(t) {
-  $$('.tool-tab').forEach(b => b.classList.toggle('active', b.dataset.tool === t));
-  $$('.tool-panel').forEach(p => { p.hidden = p.id !== 'tool-' + t; });
+function setTool(t, root) {
+  const scope = root || document;
+  scope.querySelectorAll('.tool-tab').forEach(b => b.classList.toggle('active', b.dataset.tool === t));
+  scope.querySelectorAll('.tool-panel').forEach(p => { p.hidden = p.id !== 'tool-' + t; });
 }
 
 /* ---------- 提示浮层 ---------- */
@@ -935,7 +962,9 @@ function bindEvents() {
     const nav = e.target.closest('.side-nav-item');
     if (nav) { setModule(nav.dataset.module); return; }
     const tool = e.target.closest('.tool-tab');
-    if (tool) { setTool(tool.dataset.tool); return; }
+    if (tool) { setTool(tool.dataset.tool, tool.closest('.module-panel')); return; }
+    const caseBtn = e.target.closest('[data-case]');
+    if (caseBtn) { applyCase(caseBtn.dataset.case); return; }
     const edit = e.target.closest('[data-edit]');
     if (edit) { openEdit(edit.dataset.edit); return; }
     const del = e.target.closest('[data-del]');
