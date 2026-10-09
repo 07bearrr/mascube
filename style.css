@@ -278,6 +278,8 @@ td.ops { white-space: nowrap; }
 .case-wrap textarea:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12); }
 .case-wrap textarea[readonly] { background: #f8fafc; }
 .case-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.case-output-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.case-output-head .freight-title { margin: 0; }
 @media (max-width: 560px) {
   .freight-grid { grid-template-columns: 1fr; }
   .freight-result { grid-template-columns: 1fr; }

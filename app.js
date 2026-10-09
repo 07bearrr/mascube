@@ -594,6 +594,31 @@ function applyCase(type) {
   else out.value = toTitleCase(input);
 }
 
+function execCopy(el) {
+  try {
+    el.focus();
+    el.select();
+    return document.execCommand('copy');
+  } catch (e) {
+    return false;
+  }
+}
+
+function copyCaseOutput() {
+  const out = $('#caseOutput');
+  const text = out.value;
+  if (!text) { toast('没有可复制的内容', true); return; }
+  const done = () => toast('已复制到剪贴板');
+  const fail = () => toast('复制失败，请手动选中复制', true);
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(done).catch(() => { execCopy(out) ? done() : fail(); });
+  } else if (execCopy(out)) {
+    done();
+  } else {
+    fail();
+  }
+}
+
 /* ---------- 模块四：已有报价 ---------- */
 const QUOTE_FIELDS = [
   { key: 'item_no', label: '货号', group: '基本信息' },
@@ -965,6 +990,8 @@ function bindEvents() {
     if (tool) { setTool(tool.dataset.tool, tool.closest('.module-panel')); return; }
     const caseBtn = e.target.closest('[data-case]');
     if (caseBtn) { applyCase(caseBtn.dataset.case); return; }
+    const copyCase = e.target.closest('[data-copy-case]');
+    if (copyCase) { copyCaseOutput(); return; }
     const edit = e.target.closest('[data-edit]');
     if (edit) { openEdit(edit.dataset.edit); return; }
     const del = e.target.closest('[data-del]');
