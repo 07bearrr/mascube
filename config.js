@@ -16,5 +16,8 @@ window.APP_CONFIG = {
     contracts: 'contracts',  // 合同管理模块
     quotes: 'quotes',        // 已有报价模块
     quote_folders: 'quote_folders',  // 报价大类/文件夹
+    assistant_conversations: 'assistant_conversations',  // 智能助手对话
+    settings: 'settings',  // 全局设置（汇率/运费价格，按账号隔离）
+    app_config: 'app_config',  // 全局配置（DeepSeek API Key，所有账号共享）
   },
 };

@@ -59,8 +59,13 @@ const Storage = (() => {
     return u;
   }
 
+  /* 全局集合：不做按账号隔离，所有账号读写同一份（如系统配置、账号表） */
+  function isGlobalCollection(collection) {
+    return collection === 'users' || collection === 'app_config';
+  }
+
   async function getAll(collection) {
-    const owner = (collection === 'users') ? null : ownerFor();
+    const owner = isGlobalCollection(collection) ? null : ownerFor();
     if (useCloud) {
       const filter = owner ? `&owner=eq.${encodeURIComponent(owner)}` : '';
       return await rest(`${tableFor(collection)}?select=*${filter}&order=created_at.desc`);
@@ -71,7 +76,7 @@ const Storage = (() => {
   }
 
   async function add(collection, record) {
-    if (collection !== 'users' && typeof Auth !== 'undefined' && typeof Auth.currentUser === 'function') {
+    if (!isGlobalCollection(collection) && typeof Auth !== 'undefined' && typeof Auth.currentUser === 'function') {
       const u = Auth.currentUser();
       if (u) record = { ...record, owner: u };
     }
@@ -90,7 +95,7 @@ const Storage = (() => {
   }
 
   async function update(collection, id, changes) {
-    const owner = (collection === 'users') ? null : ownerFor();
+    const owner = isGlobalCollection(collection) ? null : ownerFor();
     if (useCloud) {
       const filter = owner ? `&owner=eq.${encodeURIComponent(owner)}` : '';
       const rows = await rest(`${tableFor(collection)}?id=eq.${encodeURIComponent(id)}${filter}`, {
@@ -111,7 +116,7 @@ const Storage = (() => {
   }
 
   async function remove(collection, id) {
-    const owner = (collection === 'users') ? null : ownerFor();
+    const owner = isGlobalCollection(collection) ? null : ownerFor();
     if (useCloud) {
       const filter = owner ? `&owner=eq.${encodeURIComponent(owner)}` : '';
       await rest(`${tableFor(collection)}?id=eq.${encodeURIComponent(id)}${filter}`, { method: 'DELETE' });

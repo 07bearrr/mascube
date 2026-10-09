@@ -485,44 +485,121 @@ async function saveProgress(e) {
   }
 }
 
-/* ---------- 全局汇率 ---------- */
-const RATE_KEY = 'mascube_exchange_rate';
-const RATE_DEFAULT = '6.7';
+/* ---------- 全局设置：汇率 + 运费价格（本地/云端同步，按账号隔离） ---------- */
+const SETTINGS_COLLECTION = 'settings';
+const SETTINGS_DEFAULTS = { exchange_rate: '6.7', truck_price: '3000', sea_price: '2800' };
+const LEGACY_RATE_KEY = 'mascube_exchange_rate';
+const LEGACY_FREIGHT_KEY = 'mascube_freight_settings';
 
-function loadRate() {
-  const v = localStorage.getItem(RATE_KEY);
-  return (v === null || v === '') ? RATE_DEFAULT : v;
+let settings = { ...SETTINGS_DEFAULTS };
+let settingsId = null;
+
+function legacySettings() {
+  const s = {};
+  const rate = localStorage.getItem(LEGACY_RATE_KEY);
+  if (rate !== null && rate !== '') s.exchange_rate = rate;
+  try {
+    const f = JSON.parse(localStorage.getItem(LEGACY_FREIGHT_KEY) || '{}');
+    if (f.truck_price) s.truck_price = f.truck_price;
+    if (f.sea_price) s.sea_price = f.sea_price;
+  } catch (e) {}
+  return s;
 }
-function saveRate(v) {
-  localStorage.setItem(RATE_KEY, v);
+
+function normalizeSettings(s) {
+  return {
+    exchange_rate: (s.exchange_rate === '' || s.exchange_rate == null) ? SETTINGS_DEFAULTS.exchange_rate : s.exchange_rate,
+    truck_price: (s.truck_price === '' || s.truck_price == null) ? SETTINGS_DEFAULTS.truck_price : s.truck_price,
+    sea_price: (s.sea_price === '' || s.sea_price == null) ? SETTINGS_DEFAULTS.sea_price : s.sea_price,
+  };
 }
+
+async function loadSettings() {
+  let mine = null;
+  try {
+    const all = (await Storage.getAll(SETTINGS_COLLECTION)) || [];
+    const u = Auth.currentUser();
+    mine = all.find(r => r.owner === u) || null;
+  } catch (e) {
+    console.error(e);
+  }
+  settingsId = mine ? mine.id : null;
+  settings = normalizeSettings(mine ? {
+    exchange_rate: mine.exchange_rate, truck_price: mine.truck_price, sea_price: mine.sea_price,
+  } : { ...SETTINGS_DEFAULTS, ...legacySettings() });
+  initRate();
+  initFreight();
+}
+
+let persistTimer = null;
+function persistSettings() {
+  clearTimeout(persistTimer);
+  persistTimer = setTimeout(async () => {
+    const patch = { exchange_rate: settings.exchange_rate, truck_price: settings.truck_price, sea_price: settings.sea_price, updated_at: nowISO() };
+    try {
+      if (!settingsId) {
+        settingsId = genId();
+        await Storage.add(SETTINGS_COLLECTION, { id: settingsId, ...patch });
+      } else {
+        await Storage.update(SETTINGS_COLLECTION, settingsId, patch);
+      }
+    } catch (e) {
+      console.error(e);
+      toast('设置保存失败：' + e.message, true);
+    }
+  }, 300);
+}
+
 function getRateNum() {
-  return parseFloat(loadRate()) || 0;
+  return parseFloat(settings.exchange_rate) || 0;
 }
 function initRate() {
-  $('#globalRate').value = loadRate();
+  $('#globalRate').value = settings.exchange_rate;
+}
+function setExchangeRate(v) {
+  settings.exchange_rate = v;
+  persistSettings();
+}
+function setFreightSetting(key, value) {
+  settings[key] = value;
+  persistSettings();
+}
+
+/* ---------- 全局配置：DeepSeek API Key（所有账号共享，本地/云端同步） ---------- */
+const GLOBAL_CONFIG_COLLECTION = 'app_config';
+const GLOBAL_CONFIG_ID = 'app';
+const LEGACY_DS_KEY = 'mascube_ds_key';
+
+let globalDsKey = '';
+
+async function loadGlobalConfig() {
+  globalDsKey = localStorage.getItem(LEGACY_DS_KEY) || '';
+  try {
+    const all = (await Storage.getAll(GLOBAL_CONFIG_COLLECTION)) || [];
+    const cfg = all.find(r => r.id === GLOBAL_CONFIG_ID);
+    if (cfg && cfg.ds_api_key) {
+      globalDsKey = cfg.ds_api_key;
+      localStorage.setItem(LEGACY_DS_KEY, globalDsKey);
+    }
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+async function saveGlobalDsKey(v) {
+  globalDsKey = v;
+  localStorage.setItem(LEGACY_DS_KEY, v);
+  const patch = { ds_api_key: v, updated_at: nowISO() };
+  try {
+    let row = await Storage.update(GLOBAL_CONFIG_COLLECTION, GLOBAL_CONFIG_ID, patch);
+    if (!row) row = await Storage.add(GLOBAL_CONFIG_COLLECTION, { id: GLOBAL_CONFIG_ID, ...patch });
+  } catch (e) {
+    console.error(e);
+    toast('API Key 云端保存失败：' + e.message, true);
+  }
 }
 
 /* ---------- 模块三：运费计算 ---------- */
-const FREIGHT_KEY = 'mascube_freight_settings';
-const FREIGHT_DEFAULTS = { truck_price: '3000', sea_price: '2800' };
-
-function loadFreightSettings() {
-  let saved = {};
-  try { saved = JSON.parse(localStorage.getItem(FREIGHT_KEY)) || {}; } catch (e) {}
-  const s = { ...FREIGHT_DEFAULTS, ...saved };
-  if (s.truck_price === '' || s.truck_price == null) s.truck_price = FREIGHT_DEFAULTS.truck_price;
-  if (s.sea_price === '' || s.sea_price == null) s.sea_price = FREIGHT_DEFAULTS.sea_price;
-  return s;
-}
-function saveFreightSettings(s) {
-  localStorage.setItem(FREIGHT_KEY, JSON.stringify(s));
-}
-function updateFreightSetting(key, value) {
-  const s = loadFreightSettings();
-  s[key] = value;
-  saveFreightSettings(s);
-}
 function fmtMoney(n) {
   return '¥' + (Math.round(n * 100) / 100).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
@@ -538,9 +615,8 @@ function computeFreight() {
   $('#f_total').textContent = fmtMoney(land + sea);
 }
 function initFreight() {
-  const s = loadFreightSettings();
-  $('#f_truck_price').value = s.truck_price;
-  $('#f_sea_price').value = s.sea_price;
+  $('#f_truck_price').value = settings.truck_price;
+  $('#f_sea_price').value = settings.sea_price;
   computeFreight();
 }
 
@@ -622,19 +698,120 @@ function copyCaseOutput() {
 /* ---------- 智能助手 ---------- */
 const DS_BASE = 'https://api.deepseek.com';
 const DS_MODEL = 'deepseek-chat';
-const DS_KEY_STORAGE = 'mascube_ds_key';
 const DS_SYSTEM = '你是一名资深外贸从业者，拥有多年国际贸易实战经验，熟悉外贸全流程：询盘报价、贸易术语（FOB/CIF/DDP等）、付款方式（T/T/L/C/D/P等）、报关清关、国际物流与集装箱、单证制作、客户开发与谈判、合同条款与风险防范等。你乐于解答用户的疑问，用通俗易懂的中文回答，内容专业、实用、条理清晰，必要时举例说明。';
 
-let assistantHistory = [];
+let conversations = [];
+let activeConv = null; // 当前对话对象（id 为 null 表示尚未保存的新对话）
 
-function getDsKey() { return localStorage.getItem(DS_KEY_STORAGE) || ''; }
-function setDsKey(v) { localStorage.setItem(DS_KEY_STORAGE, v); }
+function getDsKey() { return globalDsKey || ''; }
+
+function inlineMarkdown(s) {
+  s = escapeHtml(s);
+  // 行内代码 `...`
+  s = s.replace(/`([^`]+)`/g, '<code>$1</code>');
+  // 加粗 **...**
+  s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  // 斜体 *...*
+  s = s.replace(/\*([^*\n]+)\*/g, '<em>$1</em>');
+  // 链接 [文字](网址)
+  s = s.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+  return s;
+}
+
+function isSpecialLine(line) {
+  const t = line.trim();
+  return /^```/.test(t) || /^#{1,6}\s/.test(t) || /^[-*+]\s/.test(t) || /^\d+[.)]\s/.test(t)
+    || /^>/.test(t) || /^\|/.test(t) || /^(-{3,}|\*{3,}|_{3,})$/.test(t);
+}
+
+function renderTable(rows) {
+  const parse = (line) => line.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map(c => c.trim());
+  const head = parse(rows[0]);
+  const body = rows.slice(1).map(parse);
+  return '<table><thead><tr>' + head.map(c => '<th>' + inlineMarkdown(c) + '</th>').join('')
+    + '</tr></thead><tbody>'
+    + body.map(r => '<tr>' + r.map(c => '<td>' + inlineMarkdown(c) + '</td>').join('') + '</tr>').join('')
+    + '</tbody></table>';
+}
+
+function markdownToHtml(md) {
+  const lines = String(md || '').replace(/\r\n/g, '\n').split('\n');
+  let html = '';
+  let i = 0;
+  while (i < lines.length) {
+    const t = lines[i].trim();
+
+    // 代码块
+    if (/^```/.test(t)) {
+      const buf = [];
+      i++;
+      while (i < lines.length && !/^```/.test(lines[i].trim())) { buf.push(lines[i]); i++; }
+      i++; // 跳过结尾 ```
+      html += '<pre><code>' + escapeHtml(buf.join('\n')) + '</code></pre>';
+      continue;
+    }
+
+    // 表格
+    if (t.startsWith('|') && i + 1 < lines.length && /^\|?[\s:|-]+\|?$/.test(lines[i + 1].trim()) && lines[i + 1].includes('-')) {
+      const rows = [lines[i]];
+      i += 2; // 跳过表头行和分隔行
+      while (i < lines.length && lines[i].trim().startsWith('|')) { rows.push(lines[i]); i++; }
+      html += renderTable(rows);
+      continue;
+    }
+
+    // 标题
+    const h = t.match(/^(#{1,6})\s+(.*)$/);
+    if (h) { html += '<h' + h[1].length + '>' + inlineMarkdown(h[2]) + '</h' + h[1].length + '>'; i++; continue; }
+
+    // 分隔线
+    if (/^(-{3,}|\*{3,}|_{3,})$/.test(t)) { html += '<hr>'; i++; continue; }
+
+    // 引用
+    if (t.startsWith('>')) {
+      const items = [];
+      while (i < lines.length && lines[i].trim().startsWith('>')) { items.push(lines[i].trim().replace(/^>\s?/, '')); i++; }
+      html += '<blockquote>' + items.map(inlineMarkdown).join('<br>') + '</blockquote>';
+      continue;
+    }
+
+    // 无序列表
+    if (/^[-*+]\s+/.test(t)) {
+      const items = [];
+      while (i < lines.length && /^[-*+]\s+/.test(lines[i].trim())) { items.push(lines[i].trim().replace(/^[-*+]\s+/, '')); i++; }
+      html += '<ul>' + items.map(x => '<li>' + inlineMarkdown(x) + '</li>').join('') + '</ul>';
+      continue;
+    }
+
+    // 有序列表
+    if (/^\d+[.)]\s+/.test(t)) {
+      const items = [];
+      while (i < lines.length && /^\d+[.)]\s+/.test(lines[i].trim())) { items.push(lines[i].trim().replace(/^\d+[.)]\s+/, '')); i++; }
+      html += '<ol>' + items.map(x => '<li>' + inlineMarkdown(x) + '</li>').join('') + '</ol>';
+      continue;
+    }
+
+    // 空行
+    if (t === '') { i++; continue; }
+
+    // 普通段落
+    const para = [];
+    while (i < lines.length && lines[i].trim() !== '' && !isSpecialLine(lines[i])) { para.push(lines[i].trim()); i++; }
+    if (para.length) html += '<p>' + para.map(inlineMarkdown).join('<br>') + '</p>';
+    else i++;
+  }
+  return html;
+}
 
 function renderAssistantMessage(role, text) {
   const box = $('#assistantMessages');
   const div = document.createElement('div');
   div.className = 'assistant-msg ' + (role === 'user' ? 'user' : 'bot');
-  div.textContent = text;
+  if (role === 'user') {
+    div.textContent = text;
+  } else {
+    div.innerHTML = markdownToHtml(text);
+  }
   box.appendChild(div);
   box.scrollTop = box.scrollHeight;
 }
@@ -656,6 +833,123 @@ function renderAssistantTyping(show) {
   box.scrollTop = box.scrollHeight;
 }
 
+function renderAssistantMessages() {
+  const box = $('#assistantMessages');
+  box.innerHTML = '';
+  const msgs = (activeConv && activeConv.messages) || [];
+  if (!msgs.length) {
+    const div = document.createElement('div');
+    div.className = 'assistant-msg bot';
+    div.textContent = '你好，我是你的外贸智能助手 👋 报价、贸易术语、付款方式、报关、客户开发……任何外贸问题都可以问我。';
+    box.appendChild(div);
+  } else {
+    msgs.forEach(m => renderAssistantMessage(m.role, m.content));
+  }
+  box.scrollTop = box.scrollHeight;
+}
+
+function sortConversations() {
+  conversations.sort((a, b) => (b.updated_at || b.created_at || '').localeCompare(a.updated_at || a.created_at || ''));
+}
+
+function renderConversationList() {
+  const box = $('#assistantConvList');
+  if (!conversations.length) {
+    box.innerHTML = '<div class="assistant-empty">暂无对话</div>';
+    return;
+  }
+  box.innerHTML = conversations.map(c => `
+    <div class="assistant-conv-item${c.id === (activeConv && activeConv.id) ? ' active' : ''}" data-conv="${c.id}">
+      <div class="assistant-conv-title">${escapeHtml(c.title || '新对话')}</div>
+      <div class="assistant-conv-ops">
+        <button class="btn-mini" data-conv-rename="${c.id}" type="button" title="重命名">✏️</button>
+        <button class="btn-mini danger" data-conv-del="${c.id}" type="button" title="删除">🗑️</button>
+      </div>
+    </div>`).join('');
+}
+
+async function refreshConversations() {
+  try {
+    conversations = (await Storage.getAll('assistant_conversations')) || [];
+  } catch (e) {
+    console.error(e);
+    conversations = [];
+  }
+  sortConversations();
+  renderConversationList();
+}
+
+function newConversation() {
+  activeConv = { id: null, title: '新对话', messages: [] };
+  renderAssistantMessages();
+  renderConversationList();
+  $('#assistantInput').value = '';
+  $('#assistantInput').focus();
+}
+
+async function openConversation(id) {
+  const c = conversations.find(x => x.id === id);
+  if (!c) return;
+  activeConv = c;
+  renderAssistantMessages();
+  renderConversationList();
+  $('#assistantInput').focus();
+}
+
+async function persistActiveConv() {
+  if (!activeConv || !activeConv.messages.length) return;
+  if (!activeConv.id) {
+    activeConv.id = genId();
+    activeConv.created_at = activeConv.created_at || nowISO();
+    activeConv.updated_at = nowISO();
+    activeConv = await Storage.add('assistant_conversations', { ...activeConv });
+    conversations.unshift(activeConv);
+  } else {
+    activeConv.updated_at = nowISO();
+    await Storage.update('assistant_conversations', activeConv.id, {
+      title: activeConv.title, messages: activeConv.messages, updated_at: activeConv.updated_at,
+    });
+    const idx = conversations.findIndex(c => c.id === activeConv.id);
+    if (idx >= 0) conversations[idx] = activeConv;
+  }
+  sortConversations();
+  renderConversationList();
+}
+
+async function tryPersist() {
+  try {
+    await persistActiveConv();
+  } catch (e) {
+    console.error(e);
+    const hint = Storage.isCloud() ? '（云端模式：请确认已在 Supabase 创建 assistant_conversations 表）' : '';
+    toast('对话保存失败：' + e.message + hint, true);
+  }
+}
+
+async function renameConversation(id) {
+  const c = conversations.find(x => x.id === id);
+  if (!c) return;
+  const name = (prompt('重命名对话：', c.title || '') || '').trim();
+  if (!name) return;
+  c.title = name;
+  await Storage.update('assistant_conversations', id, { title: name });
+  renderConversationList();
+}
+
+async function deleteConversation(id) {
+  const c = conversations.find(x => x.id === id);
+  if (!c) return;
+  if (!confirm(`确定删除对话「${c.title || '新对话'}」？`)) return;
+  try {
+    await Storage.remove('assistant_conversations', id);
+    conversations = conversations.filter(x => x.id !== id);
+    if (activeConv && activeConv.id === id) newConversation();
+    else renderConversationList();
+  } catch (e) {
+    toast('删除失败：' + e.message, true);
+  }
+}
+
 async function sendAssistantMessage() {
   const input = $('#assistantInput');
   const text = input.value.trim();
@@ -668,8 +962,15 @@ async function sendAssistantMessage() {
     return;
   }
   input.value = '';
-  renderAssistantMessage('user', text);
-  assistantHistory.push({ role: 'user', content: text });
+
+  if (!activeConv) newConversation();
+  activeConv.messages.push({ role: 'user', content: text });
+  if (!activeConv.title || activeConv.title === '新对话') {
+    activeConv.title = text.length > 20 ? text.slice(0, 20) + '…' : text;
+  }
+  renderAssistantMessages();
+  await tryPersist();
+
   renderAssistantTyping(true);
   try {
     const res = await fetch(DS_BASE + '/chat/completions', {
@@ -677,7 +978,7 @@ async function sendAssistantMessage() {
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key },
       body: JSON.stringify({
         model: DS_MODEL,
-        messages: [{ role: 'system', content: DS_SYSTEM }, ...assistantHistory],
+        messages: [{ role: 'system', content: DS_SYSTEM }, ...activeConv.messages],
         stream: false,
         temperature: 0.7,
       }),
@@ -689,9 +990,10 @@ async function sendAssistantMessage() {
     }
     const data = await res.json();
     const reply = (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || '（无回复内容）';
-    assistantHistory.push({ role: 'assistant', content: reply });
+    activeConv.messages.push({ role: 'assistant', content: reply });
     renderAssistantTyping(false);
-    renderAssistantMessage('bot', reply);
+    renderAssistantMessages();
+    await tryPersist();
   } catch (e) {
     renderAssistantTyping(false);
     renderAssistantMessage('bot', '出错了：' + e.message + '\n\n若提示网络错误，可能是浏览器跨域限制或网络问题。');
@@ -701,7 +1003,7 @@ async function sendAssistantMessage() {
 function saveDsKey() {
   const v = $('#dsKey').value.trim();
   if (!v) { toast('请先填写 API Key', true); return; }
-  setDsKey(v);
+  saveGlobalDsKey(v);
   $('#assistantSettings').hidden = true;
   toast('API Key 已保存');
 }
@@ -1112,8 +1414,8 @@ function bindEvents() {
 
   // 运费计算
   $('#f_volume').addEventListener('input', computeFreight);
-  $('#f_truck_price').addEventListener('input', e => { updateFreightSetting('truck_price', e.target.value); computeFreight(); });
-  $('#f_sea_price').addEventListener('input', e => { updateFreightSetting('sea_price', e.target.value); computeFreight(); });
+  $('#f_truck_price').addEventListener('input', e => { setFreightSetting('truck_price', e.target.value); computeFreight(); });
+  $('#f_sea_price').addEventListener('input', e => { setFreightSetting('sea_price', e.target.value); computeFreight(); });
 
   // 报价计算
   $('#q_unit_price').addEventListener('input', computeQuote);
@@ -1125,7 +1427,7 @@ function bindEvents() {
 
   // 全局汇率（改动后所有用到汇率的地方一起重算）
   $('#globalRate').addEventListener('input', e => {
-    saveRate(e.target.value);
+    setExchangeRate(e.target.value);
     computeFreight();
     computeQuote();
   });
@@ -1194,6 +1496,7 @@ function bindEvents() {
 
   // 智能助手
   $('#btnAssistantSend').addEventListener('click', sendAssistantMessage);
+  $('#btnAssistantNew').addEventListener('click', newConversation);
   $('#btnAssistantSettings').addEventListener('click', () => {
     $('#dsKey').value = getDsKey();
     $('#assistantSettings').hidden = !$('#assistantSettings').hidden;
@@ -1201,6 +1504,14 @@ function bindEvents() {
   $('#btnSaveKey').addEventListener('click', saveDsKey);
   $('#assistantInput').addEventListener('keydown', e => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendAssistantMessage(); }
+  });
+  document.addEventListener('click', e => {
+    const ren = e.target.closest('[data-conv-rename]');
+    if (ren) { renameConversation(ren.dataset.convRename); return; }
+    const del = e.target.closest('[data-conv-del]');
+    if (del) { deleteConversation(del.dataset.convDel); return; }
+    const conv = e.target.closest('[data-conv]');
+    if (conv) { openConversation(conv.dataset.conv); return; }
   });
 }
 
@@ -1234,11 +1545,13 @@ async function afterLogin() {
   $('#authOverlay').hidden = true;
   updateAuthUI();
   setModule('contracts');
-  initFreight();
-  initRate();
+  await loadGlobalConfig();
+  await loadSettings();
   populateFilters();
   await refresh();
   await refreshQuotes();
+  await refreshConversations();
+  newConversation();
   if (Auth.isAdmin()) await refreshAdmin();
 }
 
@@ -1280,6 +1593,10 @@ function doLogout() {
   $('#quoteList').innerHTML = '';
   $('#folderList').innerHTML = '';
   $('#adminUserList').innerHTML = '';
+  $('#assistantConvList').innerHTML = '';
+  $('#assistantMessages').innerHTML = '';
+  conversations = [];
+  activeConv = null;
 }
 
 /* ---- 管理员面板 ---- */

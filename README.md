@@ -96,7 +96,7 @@
 - **陆运费** = 总体积 ÷ 68 × 陆运柜子价格 × 汇率
 - **海运费** = 总体积 ÷ 68 × 海运柜子价格 × 汇率
 
-其中陆运柜子价格默认 **3000**、海运柜子价格默认 **2800**，都可修改、改后自动记住；汇率在系统右上角统一设置（默认 **6.7**）。
+其中陆运柜子价格默认 **3000**、海运柜子价格默认 **2800**，都可修改、改后自动记住；汇率在系统右上角统一设置（默认 **6.7**）。这些设置会**按账号自动保存并云端同步**（本地模式存本机浏览器，云端模式存 Supabase）。
 
 #### 报价计算
 
@@ -108,9 +108,9 @@
 - **人民币报价（¥/个）** = 总成本 ×（1 + 赚的点数 ÷ 100）
 - **美元报价（$/个）** = 人民币报价 ÷ 汇率
 
-汇率在系统右上角统一设置（默认 **6.7**）。
+汇率在系统右上角统一设置（默认 **6.7**），会按账号保存并云端同步。
 
-> 运费参数存在当前浏览器里（本地），换一台设备需重新设置一次。
+> 云端使用汇率/运费价格同步前，需在 Supabase 里建 `settings` 表（SQL 见第 2.3 步）；本地模式无需任何配置。
 
 ### 常用小工具
 
@@ -131,11 +131,16 @@
 内置一名「资深外贸从业者」AI 助手，懂得报价、贸易术语（FOB/CIF/DDP 等）、付款方式（T/T/L/C/D/P 等）、报关、国际物流、客户开发等外贸知识，随时解答你的疑问。
 
 - 接入 **DeepSeek API**（`deepseek-chat` 模型）
-- 首次使用点右上角 **⚙️ 设置**，粘贴你的 DeepSeek API Key（Key 只存在浏览器本地，不会写进代码仓库）
+- 首次使用点右上角 **⚙️ 设置**，粘贴你的 DeepSeek API Key（所有账号共享，本地/云端同步）
 - 输入问题点「发送」或按 Enter 即可对话；Shift + Enter 换行
 - 对话会带上多轮上下文，可以连续追问
+- 回答会自动渲染 Markdown 格式（加粗、标题、列表、代码、表格等），不再显示 `**` `#` 这类符号
+- **多对话管理**（像 DeepSeek 一样）：左侧可新建对话、切换历史对话、悬停可 ✏️ 重命名 / 🗑️ 删除；对话自动保存
+- **每个账号独立对话**：普通用户只能看到并管理自己的对话，管理员可看全部
 
-> 注意：DeepSeek API Key 是付费密钥，直接放在浏览器里理论上可被他人从网页源码/请求中看到，个人自用没问题；若要公开给别人用，建议加一个后端代理转发，避免密钥暴露。
+> ⚠️ 安全提示：DeepSeek API Key 是**付费密钥**。现在为了本地/云端同步，它随 `app_config` 表存进 Supabase，且**所有账号共享**；本项目的数据表用的是公开读取策略（`using (true)`），理论上任何拿到 anon 密钥的人都能读到这张表里的 Key。**个人自用风险可控，但请不要用重要的、余额很多的 Key，也不要公开分享该网站**。更安全的做法是加一个后端代理转发，有需要我可以帮你加。
+
+> 云端使用本模块前，需在 Supabase 里再建 `assistant_conversations` 和 `app_config` 两张表（SQL 见第 2.3 步）。
 
 ### 已有报价
 
@@ -264,6 +269,39 @@ alter table quote_folders enable row level security;
 drop policy if exists "public_all" on quote_folders;
 create policy "public_all" on quote_folders for all using (true) with check (true);
 
+create table if not exists assistant_conversations (
+  id text primary key,
+  title text,
+  messages jsonb,
+  owner text,
+  created_at text,
+  updated_at text
+);
+alter table assistant_conversations enable row level security;
+drop policy if exists "public_all" on assistant_conversations;
+create policy "public_all" on assistant_conversations for all using (true) with check (true);
+
+create table if not exists settings (
+  id text primary key,
+  exchange_rate text,
+  truck_price text,
+  sea_price text,
+  owner text,
+  updated_at text
+);
+alter table settings enable row level security;
+drop policy if exists "public_all" on settings;
+create policy "public_all" on settings for all using (true) with check (true);
+
+create table if not exists app_config (
+  id text primary key,
+  ds_api_key text,
+  updated_at text
+);
+alter table app_config enable row level security;
+drop policy if exists "public_all" on app_config;
+create policy "public_all" on app_config for all using (true) with check (true);
+
 -- 账号系统
 create table if not exists users (
   id text primary key,
@@ -279,10 +317,14 @@ create policy "public_all" on users for all using (true) with check (true);
 alter table contracts add column if not exists owner text;
 alter table quotes add column if not exists owner text;
 alter table quote_folders add column if not exists owner text;
+alter table assistant_conversations add column if not exists owner text;
+alter table settings add column if not exists owner text;
 
 update contracts set owner = 'wlb' where owner is null;
 update quotes set owner = 'wlb' where owner is null;
 update quote_folders set owner = 'wlb' where owner is null;
+update assistant_conversations set owner = 'wlb' where owner is null;
+update settings set owner = 'wlb' where owner is null;
 
 insert into users (id, username, password, is_admin, created_at)
 values ('admin', 'wlb', '66376bf896cd3fd0c2e8388050e5c34e5d9c4db69016301a089be2920a78f682', true, now()::text)
