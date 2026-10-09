@@ -1038,6 +1038,9 @@ let currentFolder = 'all';
 let editingQuoteId = null;
 let editingImages = [];
 let moveQuoteId = null;
+let collapsedFolders = new Set();
+let folderQuery = '';
+let dragFolderId = null;
 
 async function refreshQuotes() {
   try {
@@ -1052,28 +1055,79 @@ async function refreshQuotes() {
   }
 }
 
+/* ---------- 文件夹树 ---------- */
+function folderById(id) { return quoteFolders.find(f => f.id === id); }
+function folderChildren(parentId) {
+  const p = parentId || null;
+  return quoteFolders.filter(f => (f.parent_id || null) === p);
+}
+function sortedFolders(list) {
+  return list.slice().sort((a, b) => (a.name || '').localeCompare(b.name || '', 'zh-CN'));
+}
+function folderDescendants(id) {
+  const out = new Set();
+  (function walk(pid) {
+    folderChildren(pid).forEach(f => { out.add(f.id); walk(f.id); });
+  })(id);
+  return out;
+}
+function visibleFolderIds() {
+  const q = folderQuery.trim().toLowerCase();
+  if (!q) return null;
+  const matched = new Set(quoteFolders.filter(f => (f.name || '').toLowerCase().includes(q)).map(f => f.id));
+  const include = new Set(matched);
+  quoteFolders.forEach(f => {
+    if (!matched.has(f.id)) return;
+    let cur = folderById(f.parent_id);
+    while (cur) { include.add(cur.id); cur = folderById(cur.parent_id); }
+  });
+  return include;
+}
+
+function folderNodeHtml(f, depth, visible) {
+  const children = sortedFolders(folderChildren(f.id));
+  const shownChildren = visible === null ? children : children.filter(c => visible.has(c.id));
+  const hasChildren = shownChildren.length > 0;
+  const collapsed = collapsedFolders.has(f.id);
+  const kids = (!collapsed && hasChildren)
+    ? shownChildren.map(c => folderNodeHtml(c, depth + 1, visible)).join('')
+    : '';
+  return `
+    <div class="folder-node">
+      <div class="folder-item ${currentFolder === f.id ? 'active' : ''}" style="padding-left:${8 + depth * 14}px"
+           draggable="true" data-folder-id="${f.id}">
+        <button class="folder-toggle" data-folder-toggle="${f.id}" type="button" title="展开/折叠">${hasChildren ? (collapsed ? '▸' : '▾') : ''}</button>
+        <button class="folder-name" data-folder="${f.id}">📁 ${escapeHtml(f.name)}</button>
+        <span class="folder-ops">
+          <button data-folder-add="${f.id}" title="新建子文件夹">＋</button>
+          <button data-folder-rename="${f.id}" title="重命名">✏️</button>
+          <button data-folder-del="${f.id}" title="删除">🗑️</button>
+        </span>
+      </div>
+      ${kids}
+    </div>`;
+}
+
 function renderQuoteFolders() {
+  const visible = visibleFolderIds();
   const items = [
     `<button class="folder-item ${currentFolder === 'all' ? 'active' : ''}" data-folder="all">📁 全部报价</button>`,
     `<button class="folder-item ${currentFolder === 'none' ? 'active' : ''}" data-folder="none">🗂️ 未分类</button>`,
   ];
-  quoteFolders.forEach(f => {
-    items.push(`<div class="folder-item ${currentFolder === f.id ? 'active' : ''}">
-      <button class="folder-name" data-folder="${f.id}">📁 ${escapeHtml(f.name)}</button>
-      <span class="folder-ops">
-        <button data-folder-rename="${f.id}" title="重命名">✏️</button>
-        <button data-folder-del="${f.id}" title="删除">🗑️</button>
-      </span>
-    </div>`);
-  });
-  $('#folderList').innerHTML = items.join('');
+  const roots = sortedFolders(folderChildren(null));
+  const shownRoots = visible === null ? roots : roots.filter(r => visible.has(r.id));
+  shownRoots.forEach(f => items.push(folderNodeHtml(f, 0, visible)));
+  $('#folderList').innerHTML = items.join('') + '<div class="folder-drop-root" data-drop-root></div>';
 }
 
 function renderQuoteList() {
   const q = $('#quoteSearch').value.trim().toLowerCase();
   let list = quotes;
   if (currentFolder === 'none') list = list.filter(x => !x.folder_id);
-  else if (currentFolder !== 'all') list = list.filter(x => x.folder_id === currentFolder);
+  else if (currentFolder !== 'all') {
+    const ids = new Set([currentFolder, ...folderDescendants(currentFolder)]);
+    list = list.filter(x => x.folder_id && ids.has(x.folder_id));
+  }
   if (q) {
     list = list.filter(x => (x.item_no + ' ' + x.product_name + ' ' + x.supplier_cn + ' ' + x.product_spec).toLowerCase().includes(q));
   }
@@ -1128,9 +1182,20 @@ function quoteFieldsHtml(q = {}) {
     </div>`).join('');
 }
 
+function folderOptionsHtml(selectedId) {
+  let html = `<option value="">未分类</option>`;
+  (function walk(list, depth) {
+    sortedFolders(list).forEach(f => {
+      const indent = depth ? '　'.repeat(depth) + '└ ' : '';
+      html += `<option value="${f.id}" ${f.id === selectedId ? 'selected' : ''}>${indent}${escapeHtml(f.name)}</option>`;
+      walk(folderChildren(f.id), depth + 1);
+    });
+  })(folderChildren(null), 0);
+  return html;
+}
+
 function populateQuoteFolderSelect(selectedId) {
-  $('#q_folder_id').innerHTML = `<option value="">未分类</option>` +
-    quoteFolders.map(f => `<option value="${f.id}" ${f.id === selectedId ? 'selected' : ''}>${escapeHtml(f.name)}</option>`).join('');
+  $('#q_folder_id').innerHTML = folderOptionsHtml(selectedId);
 }
 
 function renderImagePreviews() {
@@ -1231,8 +1296,7 @@ async function removeQuote(id) {
 function openMoveQuote(id) {
   moveQuoteId = id;
   const q = quotes.find(x => x.id === id);
-  $('#moveFolderId').innerHTML = `<option value="">未分类</option>` +
-    quoteFolders.map(f => `<option value="${f.id}">${escapeHtml(f.name)}</option>`).join('');
+  $('#moveFolderId').innerHTML = folderOptionsHtml((q && q.folder_id) ? q.folder_id : '');
   $('#moveFolderId').value = (q && q.folder_id) ? q.folder_id : '';
   $('#moveModalMask').hidden = false;
 }
@@ -1250,15 +1314,38 @@ async function doMoveQuote(e) {
   }
 }
 
-async function addFolder() {
-  const name = prompt('请输入文件夹名称：');
+async function addFolder(parentId = null) {
+  const name = prompt(parentId ? '请输入子文件夹名称：' : '请输入文件夹名称：');
   if (!name || !name.trim()) return;
   try {
-    await Storage.add('quote_folders', { id: genId(), name: name.trim(), created_at: nowISO() });
+    await Storage.add('quote_folders', { id: genId(), name: name.trim(), parent_id: parentId || null, created_at: nowISO() });
+    if (parentId) collapsedFolders.delete(parentId);
     await refreshQuotes();
     toast('已新建文件夹');
   } catch (err) {
     toast('新建失败：' + err.message, true);
+  }
+}
+
+function toggleFolder(id) {
+  if (collapsedFolders.has(id)) collapsedFolders.delete(id);
+  else collapsedFolders.add(id);
+  renderQuoteFolders();
+}
+
+function canDropInto(srcId, targetId) {
+  if (srcId === targetId) return false;
+  return !folderDescendants(srcId).has(targetId);
+}
+
+async function moveFolder(id, parentId) {
+  if (id === parentId) return;
+  try {
+    await Storage.update('quote_folders', id, { parent_id: parentId || null });
+    await refreshQuotes();
+    toast(parentId ? '已移动到该文件夹内' : '已移动到根目录');
+  } catch (err) {
+    toast('移动失败：' + err.message, true);
   }
 }
 
@@ -1277,16 +1364,24 @@ async function renameFolder(id) {
 }
 
 async function removeFolder(id) {
-  const f = quoteFolders.find(x => x.id === id);
+  const f = folderById(id);
   if (!f) return;
-  if (!confirm(`删除文件夹「${f.name}」？里面的报价会移到「未分类」。`)) return;
+  const children = folderChildren(id);
+  const msg = children.length
+    ? `删除文件夹「${f.name}」？其子文件夹会移到上层，里面的报价会移到「未分类」。`
+    : `删除文件夹「${f.name}」？里面的报价会移到「未分类」。`;
+  if (!confirm(msg)) return;
   try {
     const affected = quotes.filter(q => q.folder_id === id);
     for (const q of affected) {
       await Storage.update('quotes', q.id, { folder_id: null, updated_at: nowISO() });
     }
+    for (const c of children) {
+      await Storage.update('quote_folders', c.id, { parent_id: f.parent_id || null });
+    }
     await Storage.remove('quote_folders', id);
     if (currentFolder === id) currentFolder = 'all';
+    collapsedFolders.delete(id);
     await refreshQuotes();
     toast('已删除文件夹');
   } catch (err) {
@@ -1439,6 +1534,10 @@ function bindEvents() {
 
   // 已有报价
   document.addEventListener('click', e => {
+    const ft = e.target.closest('[data-folder-toggle]');
+    if (ft) { toggleFolder(ft.dataset.folderToggle); return; }
+    const fa = e.target.closest('[data-folder-add]');
+    if (fa) { addFolder(fa.dataset.folderAdd); return; }
     const folder = e.target.closest('[data-folder]');
     if (folder) { currentFolder = folder.dataset.folder; renderQuoteFolders(); renderQuoteList(); return; }
     const fr = e.target.closest('[data-folder-rename]');
@@ -1458,11 +1557,52 @@ function bindEvents() {
   });
 
   $('#btnQuoteAdd').addEventListener('click', openQuoteAdd);
-  $('#btnFolderAdd').addEventListener('click', addFolder);
+  $('#btnFolderAdd').addEventListener('click', () => addFolder(null));
+  $('#folderSearch').addEventListener('input', e => { folderQuery = e.target.value; renderQuoteFolders(); });
   $('#quoteModalClose').addEventListener('click', closeQuoteModal);
   $('#quoteModalCancel').addEventListener('click', closeQuoteModal);
   $('#quoteForm').addEventListener('submit', saveQuote);
   $('#quoteSearch').addEventListener('input', renderQuoteList);
+
+  // 文件夹拖拽移动（拖到某个文件夹 = 成为其子文件夹；拖到空白处 = 移到根目录）
+  const folderListEl = $('#folderList');
+  folderListEl.addEventListener('dragstart', e => {
+    const node = e.target.closest('[data-folder-id]');
+    if (!node) return;
+    dragFolderId = node.dataset.folderId;
+    e.dataTransfer.effectAllowed = 'move';
+    try { e.dataTransfer.setData('text/plain', dragFolderId); } catch (_) {}
+    node.classList.add('dragging');
+  });
+  folderListEl.addEventListener('dragend', () => {
+    dragFolderId = null;
+    folderListEl.querySelectorAll('.dragging, .drop-over').forEach(el => el.classList.remove('dragging', 'drop-over'));
+    folderListEl.classList.remove('drop-root');
+  });
+  folderListEl.addEventListener('dragover', e => {
+    if (!dragFolderId) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    folderListEl.querySelectorAll('.drop-over').forEach(el => el.classList.remove('drop-over'));
+    const target = e.target.closest('[data-folder-id]');
+    if (target) {
+      if (canDropInto(dragFolderId, target.dataset.folderId)) target.classList.add('drop-over');
+    } else {
+      folderListEl.classList.add('drop-root');
+    }
+  });
+  folderListEl.addEventListener('drop', async e => {
+    if (!dragFolderId) return;
+    e.preventDefault();
+    const target = e.target.closest('[data-folder-id]');
+    const srcId = dragFolderId;
+    dragFolderId = null;
+    folderListEl.querySelectorAll('.dragging, .drop-over').forEach(el => el.classList.remove('dragging', 'drop-over'));
+    folderListEl.classList.remove('drop-root');
+    const newParent = target ? target.dataset.folderId : null;
+    if (newParent === srcId) return;
+    await moveFolder(srcId, newParent);
+  });
   $('#btnQuoteImg').addEventListener('click', () => $('#quoteImgInput').click());
   $('#quoteImgInput').addEventListener('change', e => {
     const files = Array.from(e.target.files || []);

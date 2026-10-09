@@ -147,7 +147,7 @@
 独立维护的产品报价库，每个货号一条报价，可上传多张图片、分大类管理。
 
 - 字段：货号、产品名称、图片（多张）、产品规格、产品包装、采购单价(¥)、外销单价($)、最小起订量、单位、内盒、出口箱尺寸（每箱数量/长/宽/高）、立方米 CBM（按长宽高自动算）、净重、毛重、供应商中文
-- 大类（文件夹）：可视化新建、重命名、删除文件夹；报价可移入/移出文件夹
+- 大类（文件夹）：树状层级结构，可视化新建/重命名/删除文件夹，支持新建子文件夹；**拖动文件夹即可移动层级**（拖到某文件夹内成为其子文件夹、拖到空白处回到根目录）；顶部支持**搜索文件夹**（自动高亮匹配项并显示其上级路径）；报价可移入/移出文件夹
 - 图片会压缩后随数据保存；本地模式受浏览器 5MB 上限影响，建议用云端模式存图片
 
 > 云端使用本模块前，需在 Supabase 里再建 `quotes` 和 `quote_folders` 两张表（SQL 见第 2.3 步）。
@@ -263,6 +263,7 @@ create policy "public_all" on quotes for all using (true) with check (true);
 create table if not exists quote_folders (
   id text primary key,
   name text,
+  parent_id text,
   created_at text
 );
 alter table quote_folders enable row level security;
@@ -317,6 +318,7 @@ create policy "public_all" on users for all using (true) with check (true);
 alter table contracts add column if not exists owner text;
 alter table quotes add column if not exists owner text;
 alter table quote_folders add column if not exists owner text;
+alter table quote_folders add column if not exists parent_id text;
 alter table assistant_conversations add column if not exists owner text;
 alter table settings add column if not exists owner text;
 
