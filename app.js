@@ -1072,6 +1072,16 @@ function folderDescendants(id) {
   })(id);
   return out;
 }
+function folderPath(id) {
+  const path = [];
+  let cur = folderById(id);
+  while (cur) { path.unshift(cur); cur = folderById(cur.parent_id); }
+  return path;
+}
+function folderQuoteCount(id) {
+  const ids = new Set([id, ...folderDescendants(id)]);
+  return quotes.filter(x => x.folder_id && ids.has(x.folder_id)).length;
+}
 function visibleFolderIds() {
   const q = folderQuery.trim().toLowerCase();
   if (!q) return null;
@@ -1126,17 +1136,42 @@ function renderQuoteFolders() {
 function renderQuoteList() {
   const q = $('#quoteSearch').value.trim().toLowerCase();
   let list = quotes;
-  if (currentFolder === 'none') list = list.filter(x => !x.folder_id);
-  else if (currentFolder !== 'all') {
-    const ids = new Set([currentFolder, ...folderDescendants(currentFolder)]);
-    list = list.filter(x => x.folder_id && ids.has(x.folder_id));
+  let subFolders = [];
+  let crumbs = '';
+
+  if (currentFolder === 'all') {
+    subFolders = sortedFolders(folderChildren(null));
+  } else {
+    subFolders = sortedFolders(folderChildren(currentFolder));
+    list = list.filter(x => x.folder_id === currentFolder);
+    const path = folderPath(currentFolder);
+    crumbs = `<div class="quote-breadcrumb">
+      <button data-crumb="all" type="button">📁 全部报价</button>${path.map((p, i) =>
+        i === path.length - 1
+          ? `<span class="crumb-cur"> / ${escapeHtml(p.name)}</span>`
+          : ` / <button data-crumb="${p.id}" type="button">${escapeHtml(p.name)}</button>`
+      ).join('')}
+    </div>`;
   }
+
   if (q) {
     list = list.filter(x => (x.item_no + ' ' + x.product_name + ' ' + x.supplier_cn + ' ' + x.product_spec).toLowerCase().includes(q));
   }
-  $('#quoteList').innerHTML = list.length
+
+  const subFolderHtml = subFolders.length
+    ? `<div class="subfolder-grid">${subFolders.map(f => `
+        <button class="subfolder-card" data-subfolder="${f.id}" type="button">
+          <span class="subfolder-icon">📁</span>
+          <span class="subfolder-name">${escapeHtml(f.name)}</span>
+          <span class="subfolder-count">${folderQuoteCount(f.id)} 项</span>
+        </button>`).join('')}</div>`
+    : '';
+
+  const quoteHtml = list.length
     ? `<div class="quote-grid">${list.map(quoteCardHtml).join('')}</div>`
-    : `<div class="empty">暂无报价，点右上角「+ 新增报价」开始</div>`;
+    : `<div class="empty">${currentFolder === 'all' ? '暂无报价，点右上角「+ 新增报价」开始' : '此文件夹暂无报价，点右上角「+ 新增报价」添加'}</div>`;
+
+  $('#quoteList').innerHTML = crumbs + subFolderHtml + quoteHtml;
 }
 
 function quoteCardHtml(q) {
@@ -1226,7 +1261,8 @@ function openQuoteAdd() {
   editingImages = [];
   $('#quoteModalTitle').textContent = '新增报价';
   $('#quoteForm').reset();
-  populateQuoteFolderSelect('');
+  const defaultFolder = (currentFolder && currentFolder !== 'all' && currentFolder !== 'none') ? currentFolder : '';
+  populateQuoteFolderSelect(defaultFolder);
   $('#quoteFields').innerHTML = quoteFieldsHtml({});
   renderImagePreviews();
   computeQuoteCbm();
@@ -1567,6 +1603,10 @@ function bindEvents() {
     if (fa) { addFolder(fa.dataset.folderAdd); return; }
     const folder = e.target.closest('[data-folder]');
     if (folder) { currentFolder = folder.dataset.folder; renderQuoteFolders(); renderQuoteList(); return; }
+    const sf = e.target.closest('[data-subfolder]');
+    if (sf) { currentFolder = sf.dataset.subfolder; renderQuoteFolders(); renderQuoteList(); return; }
+    const cr = e.target.closest('[data-crumb]');
+    if (cr) { currentFolder = cr.dataset.crumb; renderQuoteFolders(); renderQuoteList(); return; }
     const fr = e.target.closest('[data-folder-rename]');
     if (fr) { renameFolder(fr.dataset.folderRename); return; }
     const fd = e.target.closest('[data-folder-del]');

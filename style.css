@@ -373,6 +373,15 @@ td.ops { white-space: nowrap; }
 .folder-drop-root { min-height: 8px; }
 .folder-tip { margin-top: 10px; font-size: 11px; color: var(--muted); }
 .quotes-main { flex: 1; min-width: 0; }
+.quote-breadcrumb { font-size: 13px; color: var(--muted); margin-bottom: 12px; }
+.quote-breadcrumb button { border: none; background: none; color: var(--primary); cursor: pointer; font-size: 13px; padding: 0; }
+.quote-breadcrumb .crumb-cur { color: var(--text); font-weight: 600; }
+.subfolder-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; margin-bottom: 16px; }
+.subfolder-card { display: flex; align-items: center; gap: 8px; padding: 12px; background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); cursor: pointer; font-size: 14px; text-align: left; box-shadow: var(--shadow); }
+.subfolder-card:hover { border-color: var(--primary); }
+.subfolder-icon { font-size: 20px; }
+.subfolder-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.subfolder-count { font-size: 11px; color: var(--muted); }
 .quote-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 16px; }
 .quote-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow); display: flex; flex-direction: column; }
 .quote-thumb { height: 150px; background: #f1f5f9; display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; }
