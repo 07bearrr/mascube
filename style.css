@@ -363,6 +363,7 @@ td.ops { white-space: nowrap; }
 .folder-item.active { background: var(--primary); color: #fff; }
 .folder-item .folder-name { border: none; background: none; color: inherit; cursor: pointer; font-size: 14px; text-align: left; flex: 1; padding: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .folder-item .folder-toggle { border: none; background: none; cursor: pointer; color: inherit; font-size: 12px; width: 16px; padding: 0; flex-shrink: 0; }
+.folder-item .folder-rename-input { flex: 1; min-width: 0; font-size: 14px; border: 1px solid var(--primary); border-radius: 4px; padding: 2px 4px; box-sizing: border-box; }
 .folder-ops { display: none; gap: 2px; flex-shrink: 0; }
 .folder-item:hover .folder-ops { display: flex; }
 .folder-ops button { border: none; background: none; cursor: pointer; font-size: 13px; padding: 0 2px; }

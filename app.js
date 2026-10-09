@@ -1041,6 +1041,7 @@ let moveQuoteId = null;
 let collapsedFolders = new Set();
 let folderQuery = '';
 let dragFolderId = null;
+let renamingFolderId = null;
 
 async function refreshQuotes() {
   try {
@@ -1097,7 +1098,9 @@ function folderNodeHtml(f, depth, visible) {
       <div class="folder-item ${currentFolder === f.id ? 'active' : ''}" style="padding-left:${8 + depth * 14}px"
            draggable="true" data-folder-id="${f.id}">
         <button class="folder-toggle" data-folder-toggle="${f.id}" type="button" title="展开/折叠">${hasChildren ? (collapsed ? '▸' : '▾') : ''}</button>
-        <button class="folder-name" data-folder="${f.id}">📁 ${escapeHtml(f.name)}</button>
+        ${renamingFolderId === f.id
+          ? `<input class="folder-rename-input" data-folder-rename-input="${f.id}" value="${escapeHtml(f.name)}" draggable="false">`
+          : `<button class="folder-name" data-folder="${f.id}">📁 ${escapeHtml(f.name)}</button>`}
         <span class="folder-ops">
           <button data-folder-add="${f.id}" title="新建子文件夹">＋</button>
           <button data-folder-rename="${f.id}" title="重命名">✏️</button>
@@ -1118,6 +1121,7 @@ function renderQuoteFolders() {
   const shownRoots = visible === null ? roots : roots.filter(r => visible.has(r.id));
   shownRoots.forEach(f => items.push(folderNodeHtml(f, 0, visible)));
   $('#folderList').innerHTML = items.join('') + '<div class="folder-drop-root" data-drop-root></div>';
+  bindRenameInput();
 }
 
 function renderQuoteList() {
@@ -1349,13 +1353,37 @@ async function moveFolder(id, parentId) {
   }
 }
 
-async function renameFolder(id) {
-  const f = quoteFolders.find(x => x.id === id);
-  if (!f) return;
-  const name = prompt('重命名文件夹：', f.name);
-  if (!name || !name.trim()) return;
+function renameFolder(id) {
+  renamingFolderId = id;
+  renderQuoteFolders();
+}
+
+function bindRenameInput() {
+  const inp = document.querySelector('[data-folder-rename-input]');
+  if (!inp) return;
+  inp.focus();
+  inp.select();
+  const finish = save => {
+    const id = inp.dataset.folderRenameInput;
+    const val = inp.value;
+    if (save) commitRenameFolder(id, val);
+    else { renamingFolderId = null; renderQuoteFolders(); }
+  };
+  inp.addEventListener('keydown', e => {
+    e.stopPropagation();
+    if (e.key === 'Enter') { e.preventDefault(); finish(true); }
+    else if (e.key === 'Escape') { e.preventDefault(); finish(false); }
+  });
+  inp.addEventListener('blur', () => finish(true));
+  inp.addEventListener('click', e => e.stopPropagation());
+}
+
+async function commitRenameFolder(id, val) {
+  const name = (val || '').trim();
+  renamingFolderId = null;
+  if (!name) { renderQuoteFolders(); return; }
   try {
-    await Storage.update('quote_folders', id, { name: name.trim() });
+    await Storage.update('quote_folders', id, { name });
     await refreshQuotes();
     toast('已重命名');
   } catch (err) {
@@ -1567,6 +1595,7 @@ function bindEvents() {
   // 文件夹拖拽移动（拖到某个文件夹 = 成为其子文件夹；拖到空白处 = 移到根目录）
   const folderListEl = $('#folderList');
   folderListEl.addEventListener('dragstart', e => {
+    if (e.target.closest('input, textarea')) return;
     const node = e.target.closest('[data-folder-id]');
     if (!node) return;
     dragFolderId = node.dataset.folderId;
