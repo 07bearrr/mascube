@@ -20,6 +20,7 @@
         <button class="side-nav-item" data-module="tools">🧮 计算小工具</button>
         <button class="side-nav-item" data-module="utils">🧰 常用小工具</button>
         <button class="side-nav-item" data-module="quotes">💰 已有报价</button>
+        <button class="side-nav-item" data-module="assistant">🤖 智能助手</button>
         <button class="side-nav-item" data-module="admin" id="navAdmin" hidden>👤 账号管理</button>
       </nav>
       <div class="sidebar-foot">
@@ -216,6 +217,32 @@
               <input type="search" id="quoteSearch" class="search" placeholder="搜索货号 / 产品名称 / 供应商">
             </section>
             <section id="quoteList"></section>
+          </div>
+        </div>
+      </section>
+
+      <!-- 智能助手 -->
+      <section id="module-assistant" class="module-panel" hidden>
+        <header class="page-head">
+          <h2>智能助手</h2>
+          <button class="btn-mini" id="btnAssistantSettings" type="button">⚙️ 设置</button>
+        </header>
+        <div class="assistant-card">
+          <div class="assistant-settings" id="assistantSettings" hidden>
+            <label class="assistant-settings-label">DeepSeek API Key
+              <input type="password" id="dsKey" placeholder="sk-...">
+            </label>
+            <div class="assistant-settings-row">
+              <button class="btn btn-primary" id="btnSaveKey" type="button">保存</button>
+              <span class="assistant-hint">Key 只存在你的浏览器里，不会写进代码仓库</span>
+            </div>
+          </div>
+          <div class="assistant-messages" id="assistantMessages">
+            <div class="assistant-msg bot">你好，我是你的外贸智能助手 👋 报价、贸易术语、付款方式、报关、客户开发……任何外贸问题都可以问我。</div>
+          </div>
+          <div class="assistant-input">
+            <textarea id="assistantInput" rows="2" placeholder="输入你的问题，例如：FOB 和 CIF 有什么区别？"></textarea>
+            <button class="btn btn-primary" id="btnAssistantSend" type="button">发送</button>
           </div>
         </div>
       </section>

@@ -619,6 +619,93 @@ function copyCaseOutput() {
   }
 }
 
+/* ---------- 智能助手 ---------- */
+const DS_BASE = 'https://api.deepseek.com';
+const DS_MODEL = 'deepseek-chat';
+const DS_KEY_STORAGE = 'mascube_ds_key';
+const DS_SYSTEM = '你是一名资深外贸从业者，拥有多年国际贸易实战经验，熟悉外贸全流程：询盘报价、贸易术语（FOB/CIF/DDP等）、付款方式（T/T/L/C/D/P等）、报关清关、国际物流与集装箱、单证制作、客户开发与谈判、合同条款与风险防范等。你乐于解答用户的疑问，用通俗易懂的中文回答，内容专业、实用、条理清晰，必要时举例说明。';
+
+let assistantHistory = [];
+
+function getDsKey() { return localStorage.getItem(DS_KEY_STORAGE) || ''; }
+function setDsKey(v) { localStorage.setItem(DS_KEY_STORAGE, v); }
+
+function renderAssistantMessage(role, text) {
+  const box = $('#assistantMessages');
+  const div = document.createElement('div');
+  div.className = 'assistant-msg ' + (role === 'user' ? 'user' : 'bot');
+  div.textContent = text;
+  box.appendChild(div);
+  box.scrollTop = box.scrollHeight;
+}
+
+function renderAssistantTyping(show) {
+  let el = $('#assistantTyping');
+  if (show) {
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'assistantTyping';
+      el.className = 'assistant-msg bot typing';
+      el.textContent = '正在思考…';
+      $('#assistantMessages').appendChild(el);
+    }
+  } else if (el) {
+    el.remove();
+  }
+  const box = $('#assistantMessages');
+  box.scrollTop = box.scrollHeight;
+}
+
+async function sendAssistantMessage() {
+  const input = $('#assistantInput');
+  const text = input.value.trim();
+  if (!text) return;
+  const key = getDsKey();
+  if (!key) {
+    $('#dsKey').value = '';
+    $('#assistantSettings').hidden = false;
+    renderAssistantMessage('bot', '请先在上方「⚙️ 设置」里填写 DeepSeek API Key，然后就可以提问啦。');
+    return;
+  }
+  input.value = '';
+  renderAssistantMessage('user', text);
+  assistantHistory.push({ role: 'user', content: text });
+  renderAssistantTyping(true);
+  try {
+    const res = await fetch(DS_BASE + '/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key },
+      body: JSON.stringify({
+        model: DS_MODEL,
+        messages: [{ role: 'system', content: DS_SYSTEM }, ...assistantHistory],
+        stream: false,
+        temperature: 0.7,
+      }),
+    });
+    if (!res.ok) {
+      const code = res.status;
+      const hint = code === 401 ? '（API Key 无效，请检查）' : code === 402 ? '（账户余额不足）' : code === 429 ? '（请求太频繁，稍后再试）' : '';
+      throw new Error('请求失败：HTTP ' + code + hint);
+    }
+    const data = await res.json();
+    const reply = (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || '（无回复内容）';
+    assistantHistory.push({ role: 'assistant', content: reply });
+    renderAssistantTyping(false);
+    renderAssistantMessage('bot', reply);
+  } catch (e) {
+    renderAssistantTyping(false);
+    renderAssistantMessage('bot', '出错了：' + e.message + '\n\n若提示网络错误，可能是浏览器跨域限制或网络问题。');
+  }
+}
+
+function saveDsKey() {
+  const v = $('#dsKey').value.trim();
+  if (!v) { toast('请先填写 API Key', true); return; }
+  setDsKey(v);
+  $('#assistantSettings').hidden = true;
+  toast('API Key 已保存');
+}
+
 /* ---------- 模块四：已有报价 ---------- */
 const QUOTE_FIELDS = [
   { key: 'item_no', label: '货号', group: '基本信息' },
@@ -961,6 +1048,7 @@ function setModule(m) {
   $('#module-tools').hidden = m !== 'tools';
   $('#module-utils').hidden = m !== 'utils';
   $('#module-quotes').hidden = m !== 'quotes';
+  $('#module-assistant').hidden = m !== 'assistant';
   $('#module-admin').hidden = m !== 'admin';
 }
 
@@ -1102,6 +1190,17 @@ function bindEvents() {
     if (toggle) { adminToggleRole(toggle.dataset.adminToggle); return; }
     const del = e.target.closest('[data-admin-del]');
     if (del) { adminDeleteUser(del.dataset.adminDel); return; }
+  });
+
+  // 智能助手
+  $('#btnAssistantSend').addEventListener('click', sendAssistantMessage);
+  $('#btnAssistantSettings').addEventListener('click', () => {
+    $('#dsKey').value = getDsKey();
+    $('#assistantSettings').hidden = !$('#assistantSettings').hidden;
+  });
+  $('#btnSaveKey').addEventListener('click', saveDsKey);
+  $('#assistantInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendAssistantMessage(); }
   });
 }
 
