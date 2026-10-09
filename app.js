@@ -1115,7 +1115,6 @@ function renderQuoteFolders() {
   const visible = visibleFolderIds();
   const items = [
     `<button class="folder-item ${currentFolder === 'all' ? 'active' : ''}" data-folder="all">📁 全部报价</button>`,
-    `<button class="folder-item ${currentFolder === 'none' ? 'active' : ''}" data-folder="none">🗂️ 未分类</button>`,
   ];
   const roots = sortedFolders(folderChildren(null));
   const shownRoots = visible === null ? roots : roots.filter(r => visible.has(r.id));
@@ -1396,8 +1395,8 @@ async function removeFolder(id) {
   if (!f) return;
   const children = folderChildren(id);
   const msg = children.length
-    ? `删除文件夹「${f.name}」？其子文件夹会移到上层，里面的报价会移到「未分类」。`
-    : `删除文件夹「${f.name}」？里面的报价会移到「未分类」。`;
+    ? `删除文件夹「${f.name}」？其子文件夹会移到上层，里面的报价会取消归类（仍可在「全部报价」里看到）。`
+    : `删除文件夹「${f.name}」？里面的报价会取消归类（仍可在「全部报价」里看到）。`;
   if (!confirm(msg)) return;
   try {
     const affected = quotes.filter(q => q.folder_id === id);
