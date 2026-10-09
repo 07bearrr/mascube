@@ -1691,6 +1691,7 @@ function bindEvents() {
   $('#authTabLogin').addEventListener('click', () => setAuthMode('login'));
   $('#authTabRegister').addEventListener('click', () => setAuthMode('register'));
   $('#btnLogout').addEventListener('click', doLogout);
+  $('#btnGuest').addEventListener('click', enterGuest);
   $('#btnAdminAddUser').addEventListener('click', adminAddUser);
 
   document.addEventListener('click', e => {
@@ -1736,7 +1737,7 @@ let adminUsers = [];
 
 function updateAuthUI() {
   const u = Auth.currentUser();
-  $('#userName').textContent = u || '未登录';
+  $('#userName').textContent = Auth.isGuest() ? '游客' : (u || '未登录');
   const isAdmin = Auth.isAdmin();
   $('#navAdmin').hidden = !isAdmin;
   $('#btnLogout').hidden = !Auth.loggedIn();
@@ -1786,6 +1787,14 @@ async function handleAuthSubmit(e) {
   } catch (err) {
     msg.textContent = err.message || '操作失败';
   }
+}
+
+async function enterGuest() {
+  Auth.loginAsGuest();
+  $('#authUsername').value = '';
+  $('#authPassword').value = '';
+  $('#authMsg').textContent = '';
+  await afterLogin();
 }
 
 function doLogout() {

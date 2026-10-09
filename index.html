@@ -12,7 +12,10 @@
     <aside class="sidebar">
       <div class="sidebar-brand">
         <div class="sidebar-logo">📋</div>
-        <h1>业务员辅助系统</h1>
+        <div class="brand-text">
+          <h1>业务员辅助系统</h1>
+          <span class="brand-user" id="userName">未登录</span>
+        </div>
       </div>
       <nav class="side-nav">
         <button class="side-nav-item active" data-module="contracts">📦 合同管理</button>
@@ -25,10 +28,7 @@
       </nav>
       <div class="sidebar-foot">
         <span id="modeBadge" class="badge mode"></span>
-        <div class="user-chip">
-          <span id="userName">未登录</span>
-          <button id="btnLogout" class="btn-mini" type="button" hidden>退出</button>
-        </div>
+        <button id="btnLogout" class="btn-mini" type="button" hidden>退出</button>
       </div>
     </aside>
 
@@ -388,6 +388,7 @@
         <button type="submit" class="btn btn-primary btn-block" id="authSubmit">登 录</button>
       </form>
       <div class="auth-msg" id="authMsg"></div>
+      <button type="button" class="btn btn-block guest-btn" id="btnGuest">👤 游客模式进入（无需登录）</button>
     </div>
   </div>
 

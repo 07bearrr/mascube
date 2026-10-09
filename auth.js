@@ -6,6 +6,7 @@
 const Auth = (() => {
   const SESSION_KEY = 'mascube_session';
   const AUTH_SALT = 'mascube2026';
+  const GUEST_USERNAME = 'guest';
   let session = null; // { username, isAdmin, ts }
 
   /* ---- SHA-256（纯 JS 实现，兼容本地 / 云端环境） ---- */
@@ -121,6 +122,7 @@ const Auth = (() => {
 
   async function refresh() {
     if (!session) return null;
+    if (session.username === GUEST_USERNAME) return session; // 游客不查账号表，直接保持登录
     try {
       const users = await Storage.getAll('users');
       const user = users.find(u => u.username === session.username);
@@ -132,6 +134,13 @@ const Auth = (() => {
   }
 
   function logout() { clearSession(); }
+
+  /* ---- 游客模式 ---- */
+  function loginAsGuest() {
+    saveSession({ username: GUEST_USERNAME, isAdmin: false, ts: Date.now() });
+    return { username: GUEST_USERNAME, isAdmin: false };
+  }
+  function isGuest() { return !!(session && session.username === GUEST_USERNAME); }
 
   /* ---- 管理员 ---- */
   async function listUsers() {
@@ -146,5 +155,5 @@ const Auth = (() => {
     await Storage.update('users', user.id, { password: hashPassword(username, newPassword) });
   }
 
-  return { loadSession, currentUser, isAdmin, loggedIn, register, login, refresh, logout, listUsers, resetPassword, hashPassword };
+  return { loadSession, currentUser, isAdmin, isGuest, loggedIn, register, login, loginAsGuest, refresh, logout, listUsers, resetPassword, hashPassword };
 })();
