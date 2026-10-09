@@ -89,7 +89,7 @@ const Auth = (() => {
     const user = {
       id: makeId(),
       username,
-      password: await hashPassword(username, password),
+      password: hashPassword(username, password),
       is_admin: false,
       created_at: new Date().toISOString(),
     };
@@ -105,7 +105,7 @@ const Auth = (() => {
     // 首次使用（还没有任何账号）时，可用 wlb 自动初始化管理员
     if (users.length === 0 && username === 'wlb') {
       const adminHash = '66376bf896cd3fd0c2e8388050e5c34e5d9c4db69016301a089be2920a78f682';
-      if ((await hashPassword(username, password)) === adminHash) {
+      if (hashPassword(username, password) === adminHash) {
         const admin = { id: 'admin', username: 'wlb', password: adminHash, is_admin: true, created_at: new Date().toISOString() };
         await Storage.add('users', admin);
         saveSession({ username, isAdmin: true, ts: Date.now() });
@@ -114,7 +114,7 @@ const Auth = (() => {
     }
     const user = users.find(u => u.username === username);
     if (!user) throw new Error('账号不存在');
-    if ((await hashPassword(username, password)) !== user.password) throw new Error('密码错误');
+    if (hashPassword(username, password) !== user.password) throw new Error('密码错误');
     saveSession({ username, isAdmin: !!user.is_admin, ts: Date.now() });
     return user;
   }
@@ -143,7 +143,7 @@ const Auth = (() => {
     const users = await Storage.getAll('users');
     const user = users.find(u => u.username === username);
     if (!user) throw new Error('账号不存在');
-    await Storage.update('users', user.id, { password: await hashPassword(username, newPassword) });
+    await Storage.update('users', user.id, { password: hashPassword(username, newPassword) });
   }
 
   return { loadSession, currentUser, isAdmin, loggedIn, register, login, refresh, logout, listUsers, resetPassword, hashPassword };

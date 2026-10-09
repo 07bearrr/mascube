@@ -591,8 +591,8 @@ async function saveGlobalDsKey(v) {
   localStorage.setItem(LEGACY_DS_KEY, v);
   const patch = { ds_api_key: v, updated_at: nowISO() };
   try {
-    let row = await Storage.update(GLOBAL_CONFIG_COLLECTION, GLOBAL_CONFIG_ID, patch);
-    if (!row) row = await Storage.add(GLOBAL_CONFIG_COLLECTION, { id: GLOBAL_CONFIG_ID, ...patch });
+    const row = await Storage.update(GLOBAL_CONFIG_COLLECTION, GLOBAL_CONFIG_ID, patch);
+    if (!row) await Storage.add(GLOBAL_CONFIG_COLLECTION, { id: GLOBAL_CONFIG_ID, ...patch });
   } catch (e) {
     console.error(e);
     toast('API Key 云端保存失败：' + e.message, true);
@@ -1886,7 +1886,7 @@ async function adminAddUser() {
     const users = await Auth.listUsers();
     if (users.some(u => u.username === username)) { toast('该账号已存在', true); return; }
     const isAdmin = confirm('是否设为管理员？（确定=管理员，取消=普通用户）');
-    const user = { id: genId(), username, password: await Auth.hashPassword(username, pwd), is_admin: isAdmin, created_at: nowISO() };
+    const user = { id: genId(), username, password: Auth.hashPassword(username, pwd), is_admin: isAdmin, created_at: nowISO() };
     await Storage.add('users', user);
     await refreshAdmin();
     toast('已新增账号');

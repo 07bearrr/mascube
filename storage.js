@@ -16,7 +16,6 @@ const Storage = (() => {
 
   function tableFor(collection) {
     if (cfg.tables && cfg.tables[collection]) return cfg.tables[collection];
-    if (collection === 'orders' && cfg.tableName) return cfg.tableName;
     return collection;
   }
   function localKey(collection) { return LOCAL_PREFIX + collection; }
@@ -68,7 +67,8 @@ const Storage = (() => {
     const owner = isGlobalCollection(collection) ? null : ownerFor();
     if (useCloud) {
       const filter = owner ? `&owner=eq.${encodeURIComponent(owner)}` : '';
-      return await rest(`${tableFor(collection)}?select=*${filter}&order=created_at.desc`);
+      const order = (collection === 'settings' || collection === 'app_config') ? '' : '&order=created_at.desc';
+      return await rest(`${tableFor(collection)}?select=*${filter}${order}`);
     }
     let list = localGet(collection);
     if (owner) list = list.filter(r => r.owner === owner);
